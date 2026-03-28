@@ -1,0 +1,63 @@
+services:
+  nginx:
+    build: ./nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: always
+    networks:
+      - tmzon-network
+
+  backend:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - mongo
+      - redis
+    restart: always
+    volumes:
+      - uploads:/app/uploads
+      - logs:/app/logs
+    networks:
+      - tmzon-network
+
+  mongo:
+    image: mongo:7
+    volumes:
+      - mongo-data:/data/db
+    restart: always
+    networks:
+      - tmzon-network
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    restart: always
+    networks:
+      - tmzon-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    restart: always
+    networks:
+      - tmzon-network
+
+volumes:
+  mongo-data:
+  redis-data:
+  uploads:
+  logs:
+  prometheus-data:
+
+networks:
+  tmzon-network:
+    driver: bridge
