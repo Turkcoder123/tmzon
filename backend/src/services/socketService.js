@@ -20,7 +20,7 @@ const setupSocket = (io) => {
         const { conversationId, senderId, content } = data;
 
         const conversation = await Conversation.findById(conversationId);
-        if (!conversation || !conversation.participants.includes(senderId)) {
+        if (!conversation || !conversation.participants.some((p) => p.toString() === senderId.toString())) {
           socket.emit('error', { message: 'Yetkisiz' });
           return;
         }

@@ -11,7 +11,12 @@ module.exports = {
     port: parseInt(process.env.REDIS_PORT, 10) || 6379,
   },
   jwt: {
-    secret: process.env.JWT_SECRET || 'dev-secret-change-me',
+    secret: (() => {
+      if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+        throw new Error('JWT_SECRET must be set in production');
+      }
+      return process.env.JWT_SECRET || 'dev-secret-change-me';
+    })(),
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   },
   google: {

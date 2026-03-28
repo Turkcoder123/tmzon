@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const config = require('../config');
 
 const generateToken = (userId) => {
@@ -6,7 +7,7 @@ const generateToken = (userId) => {
 };
 
 const generateVerificationCode = () => {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return crypto.randomInt(100000, 999999).toString();
 };
 
 module.exports = { generateToken, generateVerificationCode };

@@ -129,7 +129,8 @@ exports.googleAuth = async (req, res, next) => {
         user.isVerified = true;
         await user.save();
       } else {
-        const username = email.split('@')[0] + '_' + Date.now().toString(36);
+        const { v4: uuidv4 } = require('uuid');
+        const username = email.split('@')[0] + '_' + uuidv4().slice(0, 8);
         user = await User.create({
           googleId,
           email,
@@ -187,7 +188,8 @@ exports.verifyPhone = async (req, res, next) => {
     let user = await User.findOne({ phone });
 
     if (!user) {
-      const username = 'user_' + Date.now().toString(36);
+      const { v4: uuidv4 } = require('uuid');
+      const username = 'user_' + uuidv4().slice(0, 8);
       user = await User.create({
         phone,
         username,

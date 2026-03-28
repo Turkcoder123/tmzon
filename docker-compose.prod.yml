@@ -25,6 +25,9 @@ services:
 
   mongo:
     image: mongo:7
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-tmzon}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASS:-changeme}
     volumes:
       - mongo-data:/data/db
     restart: always

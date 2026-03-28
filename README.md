@@ -122,8 +122,10 @@ npm run dev
 
 GitHub Actions ile otomatik deploy:
 - `main` branch'e push yapıldığında VPS'e otomatik deploy edilir
-- VPS: `root@144.172.107.118`
-- GitHub Secrets'a `VPS_SSH_KEY` eklenmeli
+- GitHub Secrets'a şunlar eklenmeli:
+  - `VPS_HOST` - VPS IP adresi
+  - `VPS_USER` - VPS kullanıcı adı
+  - `VPS_SSH_KEY` - SSH özel anahtarı
 
 ## Ortam Değişkenleri
 
