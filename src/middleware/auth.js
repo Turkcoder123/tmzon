@@ -1,9 +1,5 @@
 const jwt = require('jsonwebtoken');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'changeme_secret';
-if (!process.env.JWT_SECRET) {
-  console.warn('WARNING: JWT_SECRET is not set. Using an insecure default. Set JWT_SECRET in production.');
-}
+const { JWT_SECRET } = require('../config/env');
 
 function auth(req, res, next) {
   const header = req.headers.authorization;

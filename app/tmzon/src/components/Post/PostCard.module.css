@@ -1,0 +1,98 @@
+.card {
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 16px;
+  transition: background-color var(--transition);
+}
+
+.card:hover {
+  background-color: var(--color-bg-hover);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.authorLink {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.authorInfo {
+  display: flex;
+  flex-direction: column;
+}
+
+.authorName {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--color-text);
+}
+
+.date {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.content {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--color-text);
+  margin-bottom: 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 9999px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  transition: background-color var(--transition), color var(--transition);
+}
+
+.actionBtn:hover:not(:disabled) {
+  background-color: rgba(29, 155, 240, 0.1);
+  color: var(--color-primary);
+}
+
+.actionBtn.liked {
+  color: var(--color-danger);
+}
+
+.actionBtn.liked:hover:not(:disabled) {
+  background-color: rgba(244, 33, 46, 0.1);
+  color: var(--color-danger);
+}
+
+.actionBtn:disabled {
+  cursor: default;
+}
+
+.deleteBtn {
+  padding: 6px;
+  border-radius: 50%;
+  color: var(--color-text-muted);
+  transition: background-color var(--transition), color var(--transition);
+  flex-shrink: 0;
+}
+
+.deleteBtn:hover:not(:disabled) {
+  background-color: rgba(244, 33, 46, 0.1);
+  color: var(--color-danger);
+}

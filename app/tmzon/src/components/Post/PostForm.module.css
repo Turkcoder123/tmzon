@@ -1,0 +1,50 @@
+.form {
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.textarea {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  color: var(--color-text);
+  font-size: 17px;
+  line-height: 1.5;
+  padding: 6px 0;
+  font-family: inherit;
+}
+
+.textarea::placeholder {
+  color: var(--color-text-muted);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.charCount {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.error {
+  color: var(--color-danger);
+  font-size: 13px;
+  margin-top: 8px;
+}
