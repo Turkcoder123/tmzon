@@ -50,16 +50,15 @@ jobs:
 
             APP_DIR="$HOME/tmzon"
 
-            echo "==> Ensuring app directory exists"
-            mkdir -p "$APP_DIR"
-            cd "$APP_DIR"
-
             echo "==> Pulling latest code"
-            if [ -d .git ]; then
+            if [ -d "$APP_DIR/.git" ]; then
+              cd "$APP_DIR"
               git fetch origin main
               git reset --hard origin/main
             else
-              git clone https://github.com/${{ github.repository }}.git .
+              rm -rf "$APP_DIR"
+              git clone https://github.com/${{ github.repository }}.git "$APP_DIR"
+              cd "$APP_DIR"
             fi
 
             echo "==> Checking Docker"
