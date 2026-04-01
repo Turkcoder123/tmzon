@@ -29,7 +29,7 @@ public class EditProfileActivity extends AppCompatActivity {
 
         sessionManager = new SessionManager(this);
 
-        String username = getIntent().getStringExtra("user");
+        String username = getIntent().getStringExtra("username");
         String bio = getIntent().getStringExtra("bio");
         String avatar = getIntent().getStringExtra("avatar");
 

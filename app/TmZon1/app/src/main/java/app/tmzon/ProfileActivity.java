@@ -84,7 +84,7 @@ public class ProfileActivity extends AppCompatActivity {
             binding.btnFollowEdit.setText("Profili Düzenle");
             binding.btnFollowEdit.setOnClickListener(v -> {
                 Intent intent = new Intent(ProfileActivity.this, EditProfileActivity.class);
-                intent.putExtra("user", user.username);
+                intent.putExtra("username", user.username);
                 intent.putExtra("bio", user.bio);
                 intent.putExtra("avatar", user.avatar);
                 startActivityForResult(intent, 100);

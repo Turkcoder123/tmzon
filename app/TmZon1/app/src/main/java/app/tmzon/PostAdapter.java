@@ -73,7 +73,11 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
             }
 
             binding.tvContent.setText(post.content);
-            binding.tvCreatedAt.setText(post.createdAt != null ? post.createdAt.substring(0, Math.min(10, post.createdAt.length())) : "");
+            if (post.createdAt != null && post.createdAt.length() >= 10) {
+                binding.tvCreatedAt.setText(post.createdAt.substring(0, 10));
+            } else {
+                binding.tvCreatedAt.setText(post.createdAt != null ? post.createdAt : "");
+            }
 
             int likeCount = post.likes != null ? post.likes.size() : 0;
             binding.tvLikeCount.setText(String.valueOf(likeCount));
