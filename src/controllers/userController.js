@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const logger = require('../logger');
 
 // GET /api/users/me – own profile (auth required)
 exports.getMe = async (req, res) => {
@@ -7,8 +8,10 @@ exports.getMe = async (req, res) => {
       .populate('followers', 'username avatar')
       .populate('following', 'username avatar');
     if (!user) return res.status(404).json({ message: 'User not found' });
+    logger.debug('getMe', { user: req.user.username });
     res.json(user);
   } catch (err) {
+    logger.error('getMe error', { message: err.message, user: req.user.username });
     res.status(500).json({ message: err.message });
   }
 };
@@ -31,8 +34,10 @@ exports.updateMe = async (req, res) => {
       .populate('followers', 'username avatar')
       .populate('following', 'username avatar');
     if (!user) return res.status(404).json({ message: 'User not found' });
+    logger.info('Profile updated', { user: req.user.username, fields: Object.keys(updates) });
     res.json(user);
   } catch (err) {
+    logger.error('updateMe error', { message: err.message, user: req.user.username });
     res.status(500).json({ message: err.message });
   }
 };
@@ -44,8 +49,10 @@ exports.getProfile = async (req, res) => {
       .populate('followers', 'username avatar')
       .populate('following', 'username avatar');
     if (!user) return res.status(404).json({ message: 'User not found' });
+    logger.debug('getProfile', { username: req.params.username });
     res.json(user);
   } catch (err) {
+    logger.error('getProfile error', { message: err.message, username: req.params.username });
     res.status(500).json({ message: err.message });
   }
 };
@@ -71,8 +78,11 @@ exports.toggleFollow = async (req, res) => {
     }
     await me.save();
     await target.save();
+    const action = alreadyFollowing ? 'unfollowed' : 'followed';
+    logger.info(`User ${action}`, { actor: req.user.username, target: req.params.username, followersCount: target.followers.length });
     res.json({ following: !alreadyFollowing, followersCount: target.followers.length });
   } catch (err) {
+    logger.error('toggleFollow error', { message: err.message, actor: req.user.username, target: req.params.username });
     res.status(500).json({ message: err.message });
   }
 };
