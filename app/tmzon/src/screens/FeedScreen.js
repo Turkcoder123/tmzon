@@ -33,7 +33,8 @@ export default function FeedScreen({ navigation }) {
           : await api.getAllPosts();
       const list = Array.isArray(data) ? data : data.posts || [];
       setPosts(list);
-    } catch {
+    } catch (e) {
+      console.warn('Feed fetch error:', e.message);
       setPosts([]);
     }
   }, [activeTab]);
@@ -72,7 +73,9 @@ export default function FeedScreen({ navigation }) {
             : p
         )
       );
-    } catch {}
+    } catch (e) {
+      Alert.alert('Hata', e.message || 'Beğeni işlemi başarısız');
+    }
   }
 
   async function handleDelete(post) {
@@ -89,7 +92,9 @@ export default function FeedScreen({ navigation }) {
                 (p) => (p._id || p.id) !== (post._id || post.id)
               )
             );
-          } catch {}
+          } catch (e) {
+            Alert.alert('Hata', e.message || 'Silme işlemi başarısız');
+          }
         },
       },
     ]);

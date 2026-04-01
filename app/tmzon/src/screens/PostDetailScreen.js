@@ -52,7 +52,9 @@ export default function PostDetailScreen({ route, navigation }) {
         likes: data.likes,
         likesCount: data.likes?.length ?? p.likesCount,
       }));
-    } catch {}
+    } catch (e) {
+      Alert.alert('Hata', e.message || 'Beğeni işlemi başarısız');
+    }
   }
 
   async function handleAddComment() {
@@ -79,7 +81,9 @@ export default function PostDetailScreen({ route, navigation }) {
           try {
             await api.deleteComment(postId, commentId);
             await loadPost();
-          } catch {}
+          } catch (e) {
+            Alert.alert('Hata', e.message || 'Yorum silinemedi');
+          }
         },
       },
     ]);
@@ -95,7 +99,9 @@ export default function PostDetailScreen({ route, navigation }) {
           try {
             await api.deletePost(postId);
             navigation.goBack();
-          } catch {}
+          } catch (e) {
+            Alert.alert('Hata', e.message || 'Gönderi silinemedi');
+          }
         },
       },
     ]);

@@ -42,8 +42,8 @@ export default function ProfileScreen({ route, navigation }) {
       const postsData = await api.getUserPosts(targetUsername);
       const list = Array.isArray(postsData) ? postsData : postsData.posts || [];
       setPosts(list);
-    } catch {
-      // Silently handle errors
+    } catch (e) {
+      console.warn('Profile load error:', e.message);
     }
   }, [targetUsername, isOwnProfile]);
 
@@ -69,7 +69,9 @@ export default function ProfileScreen({ route, navigation }) {
         following: data.following,
         followersCount: data.followersCount,
       }));
-    } catch {}
+    } catch (e) {
+      Alert.alert('Hata', e.message || 'Takip işlemi başarısız');
+    }
     setFollowLoading(false);
   }
 
@@ -95,7 +97,9 @@ export default function ProfileScreen({ route, navigation }) {
             : p
         )
       );
-    } catch {}
+    } catch (e) {
+      Alert.alert('Hata', e.message || 'Beğeni işlemi başarısız');
+    }
   }
 
   async function handleDeletePost(post) {
@@ -112,7 +116,9 @@ export default function ProfileScreen({ route, navigation }) {
                 (p) => (p._id || p.id) !== (post._id || post.id)
               )
             );
-          } catch {}
+          } catch (e) {
+            Alert.alert('Hata', e.message || 'Silme işlemi başarısız');
+          }
         },
       },
     ]);
