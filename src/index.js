@@ -1,10 +1,12 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const morgan = require('morgan');
 
 const connectDB = require('./config/database');
 const { PORT, NODE_ENV } = require('./config/env');
 const { authLimiter, apiLimiter } = require('./middleware/rateLimiter');
+const logger = require('./logger');
 
 const authRoutes = require('./routes/auth');
 const postRoutes = require('./routes/posts');
@@ -23,12 +25,16 @@ app.use(cors({
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      logger.warn('CORS blocked', { origin });
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
 }));
 app.use(express.json());
+app.use(morgan(NODE_ENV === 'production' ? 'combined' : 'dev', {
+  stream: { write: (msg) => logger.info(msg.trim()) },
+}));
 
 connectDB();
 
@@ -41,13 +47,13 @@ app.use('/api/posts', apiLimiter, postRoutes);
 app.use('/api/users', apiLimiter, userRoutes);
 
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  logger.error(`Unhandled error: ${err.message}`, { stack: err.stack, url: req.url, method: req.method });
   res.status(err.status || 500).json({ message: err.message || 'Internal server error' });
 });
 
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    logger.info(`Server running on port ${PORT}`, { env: NODE_ENV });
   });
 }
 
