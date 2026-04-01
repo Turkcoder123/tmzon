@@ -1,7 +1,10 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const mongoose = require('mongoose');
+
+const connectDB = require('./config/database');
+const { PORT, NODE_ENV } = require('./config/env');
+const { authLimiter, apiLimiter } = require('./middleware/rateLimiter');
 
 const authRoutes = require('./routes/auth');
 const postRoutes = require('./routes/posts');
@@ -9,24 +12,33 @@ const userRoutes = require('./routes/users');
 
 const app = express();
 
-app.use(cors());
+const allowedOrigins = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(',').map((o) => o.trim())
+  : NODE_ENV === 'production'
+  ? []
+  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+}));
 app.use(express.json());
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://mongo:27017/tmzon';
-const PORT = process.env.PORT || 3000;
-
-mongoose
-  .connect(MONGO_URI)
-  .then(() => console.log('MongoDB connected'))
-  .catch((err) => console.error('MongoDB connection error:', err));
+connectDB();
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api/posts', postRoutes);
-app.use('/api/users', userRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/posts', apiLimiter, postRoutes);
+app.use('/api/users', apiLimiter, userRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
