@@ -67,7 +67,7 @@ jobs:
 
             echo "==> Building and starting containers"
             docker compose pull mongo
-            docker compose up -d --build
+            docker compose up -d --build --remove-orphans
 
             echo "==> Deployment complete"
             docker compose ps
