@@ -1,6 +1,6 @@
-# tmzon – Social Media API
+# tmzon – Social Media Platform
 
-A RESTful social media backend built with **Node.js**, **Express**, and **MongoDB**. Supports user registration & login (JWT), posts, likes, comments, and follow/unfollow. Containerised with **Docker Compose** and deployed automatically to a VPS via **GitHub Actions**.
+A full-stack social media platform with a **Node.js/Express** backend API and a **React Native (Expo)** mobile & web app. Supports user registration & login (JWT), posts, likes, comments, and follow/unfollow. The backend is containerised with **Docker Compose** and deployed automatically to a VPS via **GitHub Actions**.
 
 ---
 
@@ -31,6 +31,9 @@ A RESTful social media backend built with **Node.js**, **Express**, and **MongoD
 | Containerisation | Docker + Docker Compose v3.9 |
 | Testing | Jest + Supertest |
 | CI/CD | GitHub Actions |
+| Mobile/Web App | React Native (Expo SDK 54) |
+| Navigation | React Navigation 7 |
+| Platforms | Android, iOS, Web |
 
 ---
 
@@ -38,23 +41,54 @@ A RESTful social media backend built with **Node.js**, **Express**, and **MongoD
 
 ```
 tmzon/
-├── src/
-│   ├── index.js          # Express app entry point
+├── src/                       # Backend API
+│   ├── index.js               # Express app entry point
+│   ├── config/
+│   │   ├── env.js             # Environment variable config
+│   │   └── database.js        # MongoDB connection
 │   ├── models/
-│   │   ├── User.js       # User schema (username, email, password, bio, followers, following)
-│   │   └── Post.js       # Post schema (content, likes, embedded comments)
+│   │   ├── User.js            # User schema
+│   │   └── Post.js            # Post schema
 │   ├── routes/
-│   │   ├── auth.js       # /api/auth – register & login
-│   │   ├── posts.js      # /api/posts – CRUD, likes, comments
-│   │   └── users.js      # /api/users – profile & follow
+│   │   ├── auth.js            # /api/auth – register & login
+│   │   ├── posts.js           # /api/posts – CRUD, likes, comments
+│   │   └── users.js           # /api/users – profile & follow
+│   ├── controllers/
+│   │   ├── authController.js  # Auth logic
+│   │   ├── postController.js  # Post logic
+│   │   └── userController.js  # User logic
 │   └── middleware/
-│       └── auth.js       # JWT Bearer token verification
+│       ├── auth.js            # JWT Bearer token verification
+│       └── rateLimiter.js     # Rate limiting
+├── app/
+│   └── tmzon/                 # React Native (Expo) app – Android, iOS, Web
+│       ├── App.js             # Navigation + Auth context setup
+│       ├── app.json           # Expo config
+│       ├── package.json       # App dependencies
+│       └── src/
+│           ├── api/
+│           │   └── client.js          # Fetch-based API client
+│           ├── utils/
+│           │   └── session.js         # Token storage (SecureStore + localStorage)
+│           ├── context/
+│           │   └── AuthContext.js      # Auth state provider
+│           ├── screens/
+│           │   ├── LoginScreen.js     # Login
+│           │   ├── RegisterScreen.js  # Registration
+│           │   ├── FeedScreen.js      # Keşfet / Takip Edilenler tabs
+│           │   ├── PostDetailScreen.js # Post detail + comments
+│           │   ├── ProfileScreen.js   # User profile + follow
+│           │   └── EditProfileScreen.js # Edit own profile
+│           └── components/
+│               ├── PostCard.js        # Reusable post card
+│               ├── CommentItem.js     # Comment display
+│               └── CreatePostModal.js # New post modal
 ├── tests/
-│   └── app.test.js       # Jest + Supertest integration tests (14 tests)
-├── Dockerfile            # Node 18-alpine, production build
-├── docker-compose.yml    # app + mongo:6-jammy services
-├── VPS_SETUP.md          # One-time VPS setup guide
-└── package.json
+│   └── app.test.js            # Jest + Supertest integration tests
+├── Dockerfile                 # Node 18-alpine, production build
+├── docker-compose.yml         # app + mongo services
+├── VPS_SETUP.md               # One-time VPS setup guide
+└── package.json               # Backend dependencies
 ```
 
 ---
@@ -293,6 +327,54 @@ See **[VPS_SETUP.md](VPS_SETUP.md)** for the full step-by-step installation guid
 - Application directory `~/tmzon` created
 - `~/tmzon/.env` file with a strong `JWT_SECRET`
 - UFW firewall configured to allow ports 22 and 3000
+
+---
+
+## Mobile & Web App (React Native / Expo)
+
+The React Native app is located at `app/tmzon/` and supports **Android**, **iOS**, and **Web** from a single codebase using **Expo SDK 54**.
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| **Giriş / Kayıt** | Login & Register screens with JWT auth |
+| **Akış (Feed)** | Two tabs – "Keşfet" (all posts) and "Takip Edilenler" (following feed) |
+| **Gönderi Oluşturma** | Create new posts via FAB button + modal |
+| **Beğeni & Yorum** | Like posts, add/delete comments |
+| **Profil** | View user profiles, follow/unfollow, see user posts |
+| **Profil Düzenleme** | Edit username, bio, and avatar URL |
+| **Çıkış** | Logout from own profile |
+
+### Getting Started
+
+```bash
+cd app/tmzon
+npm install
+
+# Start the development server
+npx expo start
+
+# Platform-specific commands
+npm run android   # Open in Android emulator/device
+npm run ios       # Open in iOS simulator (macOS only)
+npm run web       # Open in browser
+```
+
+### Configuration
+
+The API base URL is set in `src/api/client.js`. Update the `BASE_URL` constant to point to your backend:
+
+```javascript
+const BASE_URL = 'http://localhost:3000'; // Change for production
+```
+
+### Tech Stack
+
+- **Expo SDK 54** – Cross-platform framework
+- **React Navigation 7** – Stack + Bottom Tabs navigation
+- **expo-secure-store** – Secure token storage (native) with localStorage fallback (web)
+- **Ionicons** – Icon library via `@expo/vector-icons`
 
 ---
 
