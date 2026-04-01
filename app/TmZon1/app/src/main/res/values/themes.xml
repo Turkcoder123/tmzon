@@ -6,4 +6,9 @@
     </style>
 
     <style name="Theme.TmZon" parent="Base.Theme.TmZon" />
+
+    <style name="CircleImageStyle">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
+    </style>
 </resources>
