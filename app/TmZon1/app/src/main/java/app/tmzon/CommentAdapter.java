@@ -73,7 +73,7 @@ public class CommentAdapter extends RecyclerView.Adapter<CommentAdapter.CommentV
                     public void onResponse(Call<Void> call, Response<Void> response) {
                         if (response.isSuccessful()) {
                             int idx = getAdapterPosition();
-                            if (idx != RecyclerView.NO_ID) {
+                            if (idx != RecyclerView.NO_POSITION) {
                                 comments.remove(idx);
                                 notifyItemRemoved(idx);
                             }

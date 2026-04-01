@@ -92,7 +92,7 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
                         if (response.isSuccessful() && response.body() != null) {
                             Post updated = response.body();
                             int idx = getAdapterPosition();
-                            if (idx != RecyclerView.NO_ID) {
+                            if (idx != RecyclerView.NO_POSITION) {
                                 posts.set(idx, updated);
                                 notifyItemChanged(idx);
                             }
@@ -119,7 +119,7 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
                     public void onResponse(Call<Void> call, Response<Void> response) {
                         if (response.isSuccessful()) {
                             int idx = getAdapterPosition();
-                            if (idx != RecyclerView.NO_ID) {
+                            if (idx != RecyclerView.NO_POSITION) {
                                 posts.remove(idx);
                                 notifyItemRemoved(idx);
                             }
