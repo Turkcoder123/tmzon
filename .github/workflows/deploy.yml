@@ -107,7 +107,10 @@ jobs:
 
             echo "==> Building and starting containers"
             docker compose pull mongo
-            docker compose up -d --build --remove-orphans
+            docker compose up -d --build --remove-orphans --wait
+
+            echo "==> Reloading nginx to pick up new app container IP"
+            docker compose exec -T nginx nginx -s reload
 
             echo "==> Smoke test (waiting up to 30s for app to be ready)"
             for i in $(seq 1 6); do
