@@ -99,7 +99,7 @@ jobs:
               -v "$APP_DIR/app/tmzon:/work" \
               -w /work \
               node:20-alpine \
-              sh -c "npm ci --prefer-offline && npx expo export --platform web"
+              sh -c "npm ci && npx expo export --platform web"
 
             echo "==> Checking Docker"
             docker --version
