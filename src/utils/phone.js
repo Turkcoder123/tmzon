@@ -39,8 +39,12 @@ async function sendPhoneOTP(phoneNumber) {
 async function verifyPhoneOTP(phoneNumber, code) {
   const client = getClient();
   if (!client) {
-    logger.info('Phone OTP verify (mock – no Twilio)', { phone: phoneNumber, code });
-    // In dev without Twilio, accept code "123456"
+    const { NODE_ENV } = require('../config/env');
+    if (NODE_ENV === 'production') {
+      throw new Error('Twilio not configured in production');
+    }
+    logger.info('Phone OTP verify (mock – no Twilio, dev only)', { phone: phoneNumber });
+    // In dev without Twilio, accept code "123456" for testing
     return { status: code === '123456' ? 'approved' : 'pending', valid: code === '123456' };
   }
   const check = await client.verify.v2

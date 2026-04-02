@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const User = require('../models/User');
 const logger = require('../logger');
 const {
@@ -208,9 +209,9 @@ exports.googleAuth = async (req, res) => {
       // Create new user
       const baseUsername = (name || email.split('@')[0]).replace(/[^a-zA-Z0-9_]/g, '').substring(0, 20);
       let username = baseUsername;
-      let counter = 1;
-      while (await User.findOne({ username })) {
-        username = `${baseUsername}${counter++}`;
+      const taken = await User.findOne({ username });
+      if (taken) {
+        username = `${baseUsername}${crypto.randomBytes(3).toString('hex')}`;
       }
       user = await User.create({
         username,
@@ -269,9 +270,9 @@ exports.verifyPhoneOTPHandler = async (req, res) => {
     if (!user) {
       const baseUsername = `user${phone.replace(/\D/g, '').slice(-6)}`;
       let username = baseUsername;
-      let counter = 1;
-      while (await User.findOne({ username })) {
-        username = `${baseUsername}${counter++}`;
+      const taken = await User.findOne({ username });
+      if (taken) {
+        username = `${baseUsername}${crypto.randomBytes(3).toString('hex')}`;
       }
       // Generate a placeholder email if needed – phone-only users
       const placeholderEmail = `${phone.replace(/\D/g, '')}@phone.tmzon.local`;
