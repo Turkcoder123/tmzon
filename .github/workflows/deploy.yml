@@ -111,7 +111,7 @@ jobs:
 
             echo "==> Smoke test (waiting up to 30s for app to be ready)"
             for i in $(seq 1 6); do
-              if curl -sf http://localhost:3000/health; then
+              if curl -sf http://localhost/health; then
                 echo "Health check passed"
                 break
               fi
