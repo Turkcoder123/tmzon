@@ -18,6 +18,7 @@ services:
       app:
         condition: service_healthy
     healthcheck:
+      # IPv4 önce dene; bazı Alpine/Docker kurulumlarında nginx yalnızca IPv6'ya bind olur
       test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1/nginx-health 2>/dev/null || wget -qO- http://[::1]/nginx-health 2>/dev/null']
       interval: 5s
       timeout: 3s

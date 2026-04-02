@@ -130,6 +130,7 @@ jobs:
             echo "==> Building and starting containers"
             docker compose pull mongo
             docker compose up -d --build --remove-orphans
+            # nginx config bind-mount değişikliklerini almak için her zaman yeniden başlat
             docker compose up -d --no-deps --force-recreate nginx
 
             echo "==> Waiting for all containers to become healthy (up to 150s)"
