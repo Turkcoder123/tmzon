@@ -1,6 +1,6 @@
 import { getToken } from '../utils/session';
 
-const BASE_URL = 'http://localhost:3000';
+const BASE_URL = 'http://144.172.107.118';
 
 async function request(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
