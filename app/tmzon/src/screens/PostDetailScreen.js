@@ -50,7 +50,6 @@ export default function PostDetailScreen({ route, navigation }) {
         ...p,
         liked: data.liked,
         likes: data.likes,
-        likesCount: data.likes?.length ?? p.likesCount,
       }));
     } catch (e) {
       Alert.alert('Hata', e.message || 'Beğeni işlemi başarısız');
@@ -135,7 +134,7 @@ export default function PostDetailScreen({ route, navigation }) {
     user?.userId &&
     (author._id === user.userId || author.id === user.userId);
   const liked = post.liked || false;
-  const likesCount = post.likes?.length ?? post.likesCount ?? 0;
+  const likesCount = Array.isArray(post.likes) ? post.likes.length : (post.likes ?? post.likesCount ?? 0);
   const comments = post.comments || [];
 
   function renderHeader() {

@@ -1,6 +1,35 @@
-import { getToken } from '../utils/session';
+import { getToken, getRefreshToken, getDeviceId, updateTokens, clearSession } from '../utils/session';
 
 const BASE_URL = 'http://144.172.107.118';
+
+let isRefreshing = false;
+let refreshPromise = null;
+
+async function tryRefreshToken() {
+  if (isRefreshing) return refreshPromise;
+  isRefreshing = true;
+  refreshPromise = (async () => {
+    try {
+      const refreshToken = await getRefreshToken();
+      if (!refreshToken) return false;
+      const res = await fetch(`${BASE_URL}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      await updateTokens(data.accessToken, data.refreshToken);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      isRefreshing = false;
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
+}
 
 async function request(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
@@ -16,11 +45,25 @@ async function request(endpoint, options = {}) {
     }
   }
 
-  const res = await fetch(url, {
+  let res = await fetch(url, {
     ...options,
     headers,
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
+
+  if (res.status === 401 && options.auth !== false && !options._retried) {
+    const refreshed = await tryRefreshToken();
+    if (refreshed) {
+      const newToken = await getToken();
+      headers['Authorization'] = `Bearer ${newToken}`;
+      res = await fetch(url, {
+        ...options,
+        _retried: true,
+        headers,
+        body: options.body ? JSON.stringify(options.body) : undefined,
+      });
+    }
+  }
 
   const data = await res.json();
 
@@ -46,6 +89,64 @@ export function register(username, email, password) {
     body: { username, email, password },
     auth: false,
   });
+}
+
+export function refreshToken(token) {
+  return request('/api/auth/refresh', {
+    method: 'POST',
+    body: { refreshToken: token },
+    auth: false,
+  });
+}
+
+export function logoutFromServer() {
+  return request('/api/auth/logout', { method: 'POST' });
+}
+
+export function logoutAll() {
+  return request('/api/auth/logout-all', { method: 'POST' });
+}
+
+export function forgotPassword(email) {
+  return request('/api/auth/forgot-password', {
+    method: 'POST',
+    body: { email },
+    auth: false,
+  });
+}
+
+export function resetPassword(token, email, password) {
+  return request('/api/auth/reset-password', {
+    method: 'POST',
+    body: { token, email, password },
+    auth: false,
+  });
+}
+
+export function changePassword(currentPassword, newPassword) {
+  return request('/api/auth/change-password', {
+    method: 'POST',
+    body: { currentPassword, newPassword },
+  });
+}
+
+export function verifyEmail(code) {
+  return request('/api/auth/verify-email', {
+    method: 'POST',
+    body: { code },
+  });
+}
+
+export function resendVerification() {
+  return request('/api/auth/resend-verification', { method: 'POST' });
+}
+
+export function getSessions() {
+  return request('/api/auth/sessions');
+}
+
+export function revokeSession(sessionId) {
+  return request(`/api/auth/sessions/${sessionId}`, { method: 'DELETE' });
 }
 
 // Posts

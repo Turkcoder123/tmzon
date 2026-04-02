@@ -3,6 +3,8 @@ import * as SecureStore from 'expo-secure-store';
 
 const KEYS = {
   TOKEN: 'tmzon_token',
+  REFRESH_TOKEN: 'tmzon_refresh_token',
+  DEVICE_ID: 'tmzon_device_id',
   USER_ID: 'tmzon_user_id',
   USERNAME: 'tmzon_username',
 };
@@ -11,7 +13,7 @@ async function setItem(key, value) {
   if (Platform.OS === 'web') {
     localStorage.setItem(key, value);
   } else {
-    await SecureStore.setItemAsync(key, value);
+    await SecureStore.setItemAsync(key, String(value));
   }
 }
 
@@ -30,16 +32,26 @@ async function removeItem(key) {
   }
 }
 
-export async function saveSession(token, userId, username) {
-  await Promise.all([
-    setItem(KEYS.TOKEN, token),
-    setItem(KEYS.USER_ID, String(userId)),
-    setItem(KEYS.USERNAME, username),
-  ]);
+export async function saveSession(accessToken, refreshToken, deviceId, userId, username) {
+  const tasks = [];
+  if (accessToken) tasks.push(setItem(KEYS.TOKEN, accessToken));
+  if (refreshToken) tasks.push(setItem(KEYS.REFRESH_TOKEN, refreshToken));
+  if (deviceId) tasks.push(setItem(KEYS.DEVICE_ID, deviceId));
+  if (userId) tasks.push(setItem(KEYS.USER_ID, String(userId)));
+  if (username) tasks.push(setItem(KEYS.USERNAME, username));
+  await Promise.all(tasks);
 }
 
 export async function getToken() {
   return getItem(KEYS.TOKEN);
+}
+
+export async function getRefreshToken() {
+  return getItem(KEYS.REFRESH_TOKEN);
+}
+
+export async function getDeviceId() {
+  return getItem(KEYS.DEVICE_ID);
 }
 
 export async function getUserId() {
@@ -50,6 +62,13 @@ export async function getUsername() {
   return getItem(KEYS.USERNAME);
 }
 
+export async function updateTokens(accessToken, refreshToken) {
+  const tasks = [];
+  if (accessToken) tasks.push(setItem(KEYS.TOKEN, accessToken));
+  if (refreshToken) tasks.push(setItem(KEYS.REFRESH_TOKEN, refreshToken));
+  await Promise.all(tasks);
+}
+
 export async function isLoggedIn() {
   const token = await getToken();
   return !!token;
@@ -58,6 +77,8 @@ export async function isLoggedIn() {
 export async function clearSession() {
   await Promise.all([
     removeItem(KEYS.TOKEN),
+    removeItem(KEYS.REFRESH_TOKEN),
+    removeItem(KEYS.DEVICE_ID),
     removeItem(KEYS.USER_ID),
     removeItem(KEYS.USERNAME),
   ]);
