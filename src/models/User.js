@@ -25,6 +25,12 @@ const userSchema = new mongoose.Schema(
     followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 
+    isPrivate: { type: Boolean, default: false },
+    blocked: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    blockedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    followRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    followRequestsSent: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+
     // Email verification
     emailVerified: { type: Boolean, default: false },
     emailVerificationCode: { type: String },
@@ -107,6 +113,7 @@ userSchema.set('toJSON', {
     delete ret.resetPasswordExpires;
     delete ret.loginAttempts;
     delete ret.lockUntil;
+    delete ret.blockedBy;
     // Strip refresh token hashes from sessions
     if (ret.sessions) {
       ret.sessions = ret.sessions.map((s) => ({
