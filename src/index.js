@@ -5,7 +5,7 @@ const morgan = require('morgan');
 
 const connectDB = require('./config/database');
 const { PORT, NODE_ENV } = require('./config/env');
-const { authLimiter, apiLimiter } = require('./middleware/rateLimiter');
+const { authLimiter, apiLimiter, authSlowDown } = require('./middleware/rateLimiter');
 const logger = require('./logger');
 
 const authRoutes = require('./routes/auth');
@@ -42,7 +42,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/auth', authLimiter, authSlowDown, authRoutes);
 app.use('/api/posts', apiLimiter, postRoutes);
 app.use('/api/users', apiLimiter, userRoutes);
 
