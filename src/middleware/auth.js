@@ -1,5 +1,4 @@
-const jwt = require('jsonwebtoken');
-const { JWT_SECRET } = require('../config/env');
+const { verifyAccessToken } = require('../utils/tokenUtils');
 const logger = require('../logger');
 
 function auth(req, res, next) {
@@ -10,7 +9,7 @@ function auth(req, res, next) {
   }
   const token = header.split(' ')[1];
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = verifyAccessToken(token);
     req.user = decoded;
     next();
   } catch {
