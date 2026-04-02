@@ -68,7 +68,6 @@ export default function FeedScreen({ navigation }) {
                 ...p,
                 liked: data.liked,
                 likes: data.likes,
-                likesCount: data.likes?.length ?? p.likesCount,
               }
             : p
         )

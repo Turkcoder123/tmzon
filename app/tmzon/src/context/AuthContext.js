@@ -35,21 +35,26 @@ export function AuthProvider({ children }) {
 
   async function login(email, password) {
     const data = await api.login(email, password);
-    const { token, user: u } = data;
-    await saveSession(token, u._id || u.id, u.username);
+    const { accessToken, refreshToken, deviceId, user: u } = data;
+    await saveSession(accessToken, refreshToken, deviceId, u._id || u.id, u.username);
     setUser({ userId: u._id || u.id, username: u.username });
     return data;
   }
 
   async function register(username, email, password) {
     const data = await api.register(username, email, password);
-    const { token, user: u } = data;
-    await saveSession(token, u._id || u.id, u.username);
+    const { accessToken, refreshToken, deviceId, user: u } = data;
+    await saveSession(accessToken, refreshToken, deviceId, u._id || u.id, u.username);
     setUser({ userId: u._id || u.id, username: u.username });
     return data;
   }
 
   async function logout() {
+    try {
+      await api.logoutFromServer();
+    } catch {
+      // Server logout may fail if token is expired, but we still clear locally
+    }
     await clearSession();
     setUser(null);
   }

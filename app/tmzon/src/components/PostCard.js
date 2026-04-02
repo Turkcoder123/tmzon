@@ -29,7 +29,7 @@ export default function PostCard({
   const authorName = author.username || 'Anonim';
   const firstLetter = authorName.charAt(0).toUpperCase();
   const liked = post.liked || false;
-  const likesCount = post.likes?.length ?? post.likesCount ?? 0;
+  const likesCount = Array.isArray(post.likes) ? post.likes.length : (post.likes ?? post.likesCount ?? 0);
   const commentsCount = post.comments?.length ?? post.commentsCount ?? 0;
 
   return (

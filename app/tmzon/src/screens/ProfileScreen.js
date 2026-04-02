@@ -28,6 +28,7 @@ export default function ProfileScreen({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  const [isFollowingUser, setIsFollowingUser] = useState(false);
 
   const loadProfile = useCallback(async () => {
     try {
@@ -37,7 +38,16 @@ export default function ProfileScreen({ route, navigation }) {
       } else {
         profileData = await api.getUserProfile(targetUsername);
       }
-      setProfile(profileData.user || profileData);
+      const p = profileData.user || profileData;
+      setProfile(p);
+
+      // Determine if current user follows this profile
+      if (!isOwnProfile && user?.userId && Array.isArray(p.followers)) {
+        const isFollowing = p.followers.some(
+          (f) => (f._id || f.id || f) === user.userId
+        );
+        setIsFollowingUser(isFollowing);
+      }
 
       const postsData = await api.getUserPosts(targetUsername);
       const list = Array.isArray(postsData) ? postsData : postsData.posts || [];
@@ -45,7 +55,7 @@ export default function ProfileScreen({ route, navigation }) {
     } catch (e) {
       console.warn('Profile load error:', e.message);
     }
-  }, [targetUsername, isOwnProfile]);
+  }, [targetUsername, isOwnProfile, user?.userId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -64,10 +74,14 @@ export default function ProfileScreen({ route, navigation }) {
     setFollowLoading(true);
     try {
       const data = await api.toggleFollow(targetUsername);
+      setIsFollowingUser(data.following);
       setProfile((p) => ({
         ...p,
-        following: data.following,
-        followersCount: data.followersCount,
+        followers: data.following
+          ? [...(Array.isArray(p.followers) ? p.followers : []), { _id: user?.userId }]
+          : (Array.isArray(p.followers) ? p.followers : []).filter(
+              (f) => (f._id || f.id || f) !== user?.userId
+            ),
       }));
     } catch (e) {
       Alert.alert('Hata', e.message || 'Takip işlemi başarısız');
@@ -92,7 +106,6 @@ export default function ProfileScreen({ route, navigation }) {
                 ...p,
                 liked: data.liked,
                 likes: data.likes,
-                likesCount: data.likes?.length ?? p.likesCount,
               }
             : p
         )
@@ -138,9 +151,8 @@ export default function ProfileScreen({ route, navigation }) {
   const username = profile?.username || targetUsername || '';
   const firstLetter = username.charAt(0).toUpperCase();
   const bio = profile?.bio || '';
-  const followersCount = profile?.followersCount ?? profile?.followers?.length ?? 0;
-  const followingCount = profile?.followingCount ?? profile?.following?.length ?? 0;
-  const isFollowing = profile?.following === true || profile?.isFollowing === true;
+  const followersCount = Array.isArray(profile?.followers) ? profile.followers.length : (profile?.followersCount ?? 0);
+  const followingCount = Array.isArray(profile?.following) ? profile.following.length : (profile?.followingCount ?? 0);
 
   function renderHeader() {
     return (
@@ -192,24 +204,24 @@ export default function ProfileScreen({ route, navigation }) {
             <TouchableOpacity
               style={[
                 styles.followBtn,
-                isFollowing && styles.followBtnActive,
+                isFollowingUser && styles.followBtnActive,
               ]}
               onPress={handleFollow}
               disabled={followLoading}
             >
               {followLoading ? (
                 <ActivityIndicator
-                  color={isFollowing ? '#1DA1F2' : '#fff'}
+                  color={isFollowingUser ? '#1DA1F2' : '#fff'}
                   size="small"
                 />
               ) : (
                 <Text
                   style={[
                     styles.followBtnText,
-                    isFollowing && styles.followBtnTextActive,
+                    isFollowingUser && styles.followBtnTextActive,
                   ]}
                 >
-                  {isFollowing ? 'Takibi Bırak' : 'Takip Et'}
+                  {isFollowingUser ? 'Takibi Bırak' : 'Takip Et'}
                 </Text>
               )}
             </TouchableOpacity>
