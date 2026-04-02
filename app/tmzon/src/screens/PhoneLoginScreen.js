@@ -12,25 +12,23 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../context/AuthContext';
 
-export default function LoginScreen({ navigation }) {
-  const { login } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+export default function PhoneLoginScreen({ navigation }) {
+  const [countryCode] = useState('+90');
+  const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [secureEntry, setSecureEntry] = useState(true);
 
-  async function handleLogin() {
-    if (!email.trim() || !password.trim()) {
-      setError('Please fill in all fields');
+  async function handleSendOtp() {
+    if (!phone.trim()) {
+      setError('Please enter your phone number');
       return;
     }
     setError('');
     setLoading(true);
     try {
-      await login(email.trim(), password);
+      const fullPhone = countryCode + phone.trim();
+      navigation.navigate('OtpVerification', { phone: fullPhone });
     } catch (e) {
       setError(e.message);
     } finally {
@@ -48,7 +46,6 @@ export default function LoginScreen({ navigation }) {
           contentContainerStyle={styles.container}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Back button */}
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
@@ -56,97 +53,56 @@ export default function LoginScreen({ navigation }) {
             <Ionicons name="arrow-back" size={24} color="#14171A" />
           </TouchableOpacity>
 
-          {/* Title */}
-          <Text style={styles.title}>Welcome Back!</Text>
+          <Text style={styles.title}>Phone Login</Text>
           <Text style={styles.subtitle}>
-            Sign in to continue to your account
+            Enter your phone number to receive a verification code
           </Text>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          {/* Email input */}
-          <View style={styles.inputContainer}>
-            <Ionicons name="mail-outline" size={20} color="#AAB8C2" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Email address"
-              placeholderTextColor="#AAB8C2"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
-
-          {/* Password input */}
-          <View style={styles.inputContainer}>
-            <Ionicons name="lock-closed-outline" size={20} color="#AAB8C2" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#AAB8C2"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={secureEntry}
-            />
-            <TouchableOpacity
-              style={styles.eyeButton}
-              onPress={() => setSecureEntry(!secureEntry)}
-            >
-              <Ionicons
-                name={secureEntry ? 'eye-off-outline' : 'eye-outline'}
-                size={20}
-                color="#AAB8C2"
-              />
+          <View style={styles.phoneRow}>
+            <TouchableOpacity style={styles.countryCodeBox}>
+              <Text style={styles.countryFlag}>{'\uD83C\uDDF9\uD83C\uDDF7'}</Text>
+              <Text style={styles.countryCodeText}>{countryCode}</Text>
+              <Ionicons name="chevron-down" size={16} color="#657786" />
             </TouchableOpacity>
+            <TextInput
+              style={styles.phoneInput}
+              placeholder="Phone number"
+              placeholderTextColor="#657786"
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+              maxLength={15}
+            />
           </View>
 
-          {/* Forgot password */}
-          <TouchableOpacity
-            style={styles.forgotLink}
-            onPress={() => navigation.navigate('ForgotPassword')}
-          >
-            <Text style={styles.forgotText}>Forgot Password?</Text>
-          </TouchableOpacity>
-
-          {/* Login button */}
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleLogin}
+            onPress={handleSendOtp}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Login</Text>
+              <Text style={styles.buttonText}>Continue</Text>
             )}
           </TouchableOpacity>
 
-          {/* Divider */}
           <View style={styles.dividerContainer}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>or continue with</Text>
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Social login buttons */}
-          <View style={styles.socialRow}>
-            <TouchableOpacity style={styles.socialButton}>
-              <Ionicons name="logo-google" size={22} color="#DB4437" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.socialButton}>
-              <Ionicons name="logo-apple" size={22} color="#14171A" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.socialButton}
-              onPress={() => navigation.navigate('PhoneLogin')}
-            >
-              <Ionicons name="call-outline" size={22} color="#17BF63" />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.altButton}
+            onPress={() => navigation.navigate('Login')}
+          >
+            <Ionicons name="mail-outline" size={20} color="#14171A" />
+            <Text style={styles.altButtonText}>Login with Email</Text>
+          </TouchableOpacity>
 
-          {/* Sign up link */}
           <View style={styles.bottomLink}>
             <Text style={styles.bottomText}>New to tmzon? </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Register')}>
@@ -175,7 +131,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7F9FA',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 28,
+    marginBottom: 24,
   },
   title: {
     fontSize: 28,
@@ -193,48 +149,48 @@ const styles = StyleSheet.create({
     color: '#E0245E',
     fontSize: 14,
     marginBottom: 16,
-    backgroundColor: '#FFF0F3',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    overflow: 'hidden',
   },
-  inputContainer: {
+  phoneRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 20,
+  },
+  countryCodeBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F7F9FA',
     borderWidth: 1,
     borderColor: '#E1E8ED',
     borderRadius: 14,
-    marginBottom: 14,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    gap: 6,
   },
-  inputIcon: {
-    marginRight: 10,
+  countryFlag: {
+    fontSize: 20,
   },
-  input: {
-    flex: 1,
-    paddingVertical: 16,
+  countryCodeText: {
     fontSize: 16,
+    fontWeight: '600',
     color: '#14171A',
   },
-  eyeButton: {
-    padding: 4,
-  },
-  forgotLink: {
-    alignSelf: 'flex-end',
-    marginBottom: 24,
-  },
-  forgotText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1DA1F2',
+  phoneInput: {
+    flex: 1,
+    backgroundColor: '#F7F9FA',
+    borderWidth: 1,
+    borderColor: '#E1E8ED',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: '#14171A',
   },
   button: {
     backgroundColor: '#1DA1F2',
     borderRadius: 28,
     paddingVertical: 16,
     alignItems: 'center',
+    marginTop: 4,
   },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
@@ -253,26 +209,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#657786',
   },
-  socialRow: {
+  altButton: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 16,
-    marginBottom: 32,
-  },
-  socialButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E1E8ED',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E1E8ED',
+    borderRadius: 28,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  altButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#14171A',
   },
   bottomLink: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 32,
   },
   bottomText: {
     fontSize: 15,

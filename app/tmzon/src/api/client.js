@@ -149,6 +149,23 @@ export function revokeSession(sessionId) {
   return request(`/api/auth/sessions/${sessionId}`, { method: 'DELETE' });
 }
 
+// Phone auth
+export function sendPhoneOtp(phone) {
+  return request('/api/auth/phone/send-otp', {
+    method: 'POST',
+    body: { phone },
+    auth: false,
+  });
+}
+
+export function verifyPhoneOtp(phone, code) {
+  return request('/api/auth/phone/verify-otp', {
+    method: 'POST',
+    body: { phone, code },
+    auth: false,
+  });
+}
+
 // Posts
 export function getAllPosts() {
   return request('/api/posts');
