@@ -78,7 +78,7 @@ const CHATS = [
   {
     id: '7',
     name: 'David Park',
-    lastMessage: 'Lets catch up soon',
+    lastMessage: "Let's catch up soon",
     time: '2d',
     unread: 0,
     color: '#1DA1F2',
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '800',
     color: '#14171A',
-    fontFamily: Platform?.OS === 'ios' ? 'InriaSans-Bold' : undefined,
+    fontFamily: Platform.OS === 'ios' ? 'InriaSans-Bold' : undefined,
   },
   toolbarActions: {
     flexDirection: 'row',
