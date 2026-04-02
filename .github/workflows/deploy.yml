@@ -111,6 +111,7 @@ jobs:
 
             echo "==> Reloading nginx to pick up new app container IP"
             docker compose exec -T nginx nginx -s reload
+            sleep 3
 
             echo "==> Smoke test (waiting up to 30s for app to be ready)"
             for i in $(seq 1 6); do
@@ -120,7 +121,10 @@ jobs:
               fi
               if [ "$i" -eq 6 ]; then
                 echo "Health check failed after 30s"
+                echo "--- app logs ---"
                 docker compose logs app --tail=20
+                echo "--- nginx logs ---"
+                docker compose logs nginx --tail=20
                 exit 1
               fi
               echo "Waiting... ($i/6)"
