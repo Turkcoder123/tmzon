@@ -18,7 +18,7 @@ services:
       app:
         condition: service_healthy
     healthcheck:
-      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1/nginx-health']
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1/nginx-health 2>/dev/null || wget -qO- http://[::1]/nginx-health 2>/dev/null']
       interval: 5s
       timeout: 3s
       retries: 5
