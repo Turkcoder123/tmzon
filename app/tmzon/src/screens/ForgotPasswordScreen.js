@@ -9,31 +9,53 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuth } from '../context/AuthContext';
+import * as api from '../api/client';
 
-export default function LoginScreen({ navigation }) {
-  const { login } = useAuth();
+export default function ForgotPasswordScreen({ navigation }) {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState('');
 
-  async function handleLogin() {
-    if (!email.trim() || !password.trim()) {
-      setError('Lütfen tüm alanları doldurun');
+  async function handleSend() {
+    if (!email.trim()) {
+      setError('Lütfen e-posta adresinizi girin');
       return;
     }
     setError('');
     setLoading(true);
     try {
-      await login(email.trim(), password);
+      await api.forgotPassword(email.trim());
+      setSent(true);
     } catch (e) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
+  }
+
+  if (sent) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ScrollView contentContainerStyle={styles.container}>
+          <Text style={styles.logo}>tmzon</Text>
+          <Text style={styles.title}>E-posta Gönderildi</Text>
+          <Text style={styles.description}>
+            Şifre sıfırlama bağlantısı e-posta adresinize gönderildi. Lütfen
+            gelen kutunuzu kontrol edin.
+          </Text>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => navigation.navigate('Login')}
+          >
+            <Text style={styles.buttonText}>Giriş Sayfasına Dön</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -47,7 +69,10 @@ export default function LoginScreen({ navigation }) {
           keyboardShouldPersistTaps="handled"
         >
           <Text style={styles.logo}>tmzon</Text>
-          <Text style={styles.subtitle}>Topluluğuna katıl</Text>
+          <Text style={styles.title}>Şifreni mi Unuttun?</Text>
+          <Text style={styles.description}>
+            E-posta adresini gir, sana şifre sıfırlama bağlantısı gönderelim.
+          </Text>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -61,41 +86,26 @@ export default function LoginScreen({ navigation }) {
             autoCapitalize="none"
             autoCorrect={false}
           />
-          <TextInput
-            style={styles.input}
-            placeholder="Şifre"
-            placeholderTextColor="#657786"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
 
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleLogin}
+            onPress={handleSend}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Giriş Yap</Text>
+              <Text style={styles.buttonText}>Sıfırlama Bağlantısı Gönder</Text>
             )}
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.link}
-            onPress={() => navigation.navigate('Register')}
+            onPress={() => navigation.goBack()}
           >
             <Text style={styles.linkText}>
-              Hesabın yok mu? <Text style={styles.linkBold}>Kayıt Ol</Text>
+              <Text style={styles.linkBold}>Giriş Yap</Text> sayfasına dön
             </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.forgotLink}
-            onPress={() => navigation.navigate('ForgotPassword')}
-          >
-            <Text style={styles.linkBold}>Şifreni mi unuttun?</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -119,11 +129,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 8,
   },
-  subtitle: {
-    fontSize: 16,
+  title: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#14171A',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  description: {
+    fontSize: 15,
     color: '#657786',
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 28,
+    lineHeight: 22,
   },
   error: {
     color: '#E0245E',
@@ -154,5 +172,4 @@ const styles = StyleSheet.create({
   link: { marginTop: 24, alignItems: 'center' },
   linkText: { color: '#657786', fontSize: 15 },
   linkBold: { color: '#1DA1F2', fontWeight: '600' },
-  forgotLink: { marginTop: 16, alignItems: 'center' },
 });

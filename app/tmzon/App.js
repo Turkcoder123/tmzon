@@ -10,10 +10,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
+import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import FeedScreen from './src/screens/FeedScreen';
 import PostDetailScreen from './src/screens/PostDetailScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import EditProfileScreen from './src/screens/EditProfileScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+import ChangePasswordScreen from './src/screens/ChangePasswordScreen';
+import SessionsScreen from './src/screens/SessionsScreen';
+import VerifyEmailScreen from './src/screens/VerifyEmailScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -50,6 +55,19 @@ function MainTabs() {
           ),
         }}
       />
+      <Tab.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{
+          tabBarLabel: 'Ayarlar',
+          headerShown: true,
+          headerTitle: 'Ayarlar',
+          headerTintColor: '#1DA1F2',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="settings-outline" size={size} color={color} />
+          ),
+        }}
+      />
     </Tab.Navigator>
   );
 }
@@ -79,6 +97,11 @@ function AppNavigator() {
             component={RegisterScreen}
             options={{ headerShown: false }}
           />
+          <Stack.Screen
+            name="ForgotPassword"
+            component={ForgotPasswordScreen}
+            options={{ title: 'Şifremi Unuttum' }}
+          />
         </>
       ) : (
         <>
@@ -101,6 +124,21 @@ function AppNavigator() {
             name="ProfileView"
             component={ProfileScreen}
             options={{ title: 'Profil' }}
+          />
+          <Stack.Screen
+            name="ChangePassword"
+            component={ChangePasswordScreen}
+            options={{ title: 'Şifre Değiştir' }}
+          />
+          <Stack.Screen
+            name="Sessions"
+            component={SessionsScreen}
+            options={{ title: 'Aktif Oturumlar' }}
+          />
+          <Stack.Screen
+            name="VerifyEmail"
+            component={VerifyEmailScreen}
+            options={{ title: 'E-posta Doğrulama' }}
           />
         </>
       )}
