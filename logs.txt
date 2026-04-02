@@ -1,0 +1,565 @@
+Run appleboy/ssh-action@v1.0.3
+/usr/bin/docker run --name f20543c4ec7ed6ac1847b4be9199cba603be83_ec1933 --label f20543 --workdir /github/workspace --rm -e "INPUT_HOST" -e "INPUT_USERNAME" -e "INPUT_KEY" -e "INPUT_PORT" -e "INPUT_SCRIPT" -e "INPUT_PASSPHRASE" -e "INPUT_PASSWORD" -e "INPUT_SYNC" -e "INPUT_USE_INSECURE_CIPHER" -e "INPUT_CIPHER" -e "INPUT_TIMEOUT" -e "INPUT_COMMAND_TIMEOUT" -e "INPUT_KEY_PATH" -e "INPUT_FINGERPRINT" -e "INPUT_PROXY_HOST" -e "INPUT_PROXY_PORT" -e "INPUT_PROXY_USERNAME" -e "INPUT_PROXY_PASSWORD" -e "INPUT_PROXY_PASSPHRASE" -e "INPUT_PROXY_TIMEOUT" -e "INPUT_PROXY_KEY" -e "INPUT_PROXY_KEY_PATH" -e "INPUT_PROXY_FINGERPRINT" -e "INPUT_PROXY_CIPHER" -e "INPUT_PROXY_USE_INSECURE_CIPHER" -e "INPUT_SCRIPT_STOP" -e "INPUT_ENVS" -e "INPUT_ENVS_FORMAT" -e "INPUT_DEBUG" -e "INPUT_ALLENVS" -e "INPUT_REQUEST_PTY" -e "HOME" -e "GITHUB_JOB" -e "GITHUB_REF" -e "GITHUB_SHA" -e "GITHUB_REPOSITORY" -e "GITHUB_REPOSITORY_OWNER" -e "GITHUB_REPOSITORY_OWNER_ID" -e "GITHUB_RUN_ID" -e "GITHUB_RUN_NUMBER" -e "GITHUB_RETENTION_DAYS" -e "GITHUB_RUN_ATTEMPT" -e "GITHUB_ACTOR_ID" -e "GITHUB_ACTOR" -e "GITHUB_WORKFLOW" -e "GITHUB_HEAD_REF" -e "GITHUB_BASE_REF" -e "GITHUB_EVENT_NAME" -e "GITHUB_SERVER_URL" -e "GITHUB_API_URL" -e "GITHUB_GRAPHQL_URL" -e "GITHUB_REF_NAME" -e "GITHUB_REF_PROTECTED" -e "GITHUB_REF_TYPE" -e "GITHUB_WORKFLOW_REF" -e "GITHUB_WORKFLOW_SHA" -e "GITHUB_REPOSITORY_ID" -e "GITHUB_TRIGGERING_ACTOR" -e "GITHUB_WORKSPACE" -e "GITHUB_ACTION" -e "GITHUB_EVENT_PATH" -e "GITHUB_ACTION_REPOSITORY" -e "GITHUB_ACTION_REF" -e "GITHUB_PATH" -e "GITHUB_ENV" -e "GITHUB_STEP_SUMMARY" -e "GITHUB_STATE" -e "GITHUB_OUTPUT" -e "RUNNER_OS" -e "RUNNER_ARCH" -e "RUNNER_NAME" -e "RUNNER_ENVIRONMENT" -e "RUNNER_TOOL_CACHE" -e "RUNNER_TEMP" -e "RUNNER_WORKSPACE" -e "ACTIONS_RUNTIME_URL" -e "ACTIONS_RUNTIME_TOKEN" -e "ACTIONS_CACHE_URL" -e "ACTIONS_RESULTS_URL" -e "ACTIONS_ORCHESTRATION_ID" -e GITHUB_ACTIONS=true -e CI=true -v "/var/run/docker.sock":"/var/run/docker.sock" -v "/home/runner/work/_temp":"/github/runner_temp" -v "/home/runner/work/_temp/_github_home":"/github/home" -v "/home/runner/work/_temp/_github_workflow":"/github/workflow" -v "/home/runner/work/_temp/_runner_file_commands":"/github/file_commands" -v "/home/runner/work/tmzon/tmzon":"/github/workspace" f20543:c4ec7ed6ac1847b4be9199cba603be83
+======CMD======
+set -e
+
+APP_DIR="$HOME/tmzon"
+
+echo "==> Pulling latest code"
+if [ -d "$APP_DIR/.git" ]; then
+  cd "$APP_DIR"
+  git fetch origin main
+  git reset --hard origin/main
+else
+  rm -rf "$APP_DIR"
+  git clone https://github.com/Turkcoder123/tmzon.git "$APP_DIR"
+  cd "$APP_DIR"
+fi
+
+echo "==> Building frontend"
+docker run --rm \
+  -v "$APP_DIR/app/tmzon:/work" \
+  -w /work \
+  node:20-alpine \
+  sh -c "npm ci --prefer-offline && npx expo export --platform web"
+
+echo "==> Checking Docker"
+docker --version
+docker compose version 2>/dev/null || docker-compose --version
+
+# ── helper: dump full diagnostics for all services ─────────────────
+dump_logs() {
+  echo "::group::docker compose ps"
+  docker compose ps
+  echo "::endgroup::"
+
+  for svc in mongo app nginx; do
+    name="tmzon-${svc}"
+    echo "::group::healthcheck details — ${name}"
+    docker inspect --format='{{json .State.Health}}' "$name" 2>/dev/null \
+      | python3 -m json.tool 2>/dev/null \
+      || docker inspect --format='{{json .State.Health}}' "$name" 2>/dev/null \
+      || echo "(container not found)"
+    echo "::endgroup::"
+
+    echo "::group::logs — ${name} (last 50 lines)"
+    docker compose logs "$svc" --tail=50 2>/dev/null || echo "(no logs)"
+    echo "::endgroup::"
+  done
+}
+# ──────────────────────────────────────────────────────────────────
+
+echo "==> Building and starting containers"
+docker compose pull mongo
+docker compose up -d --build --remove-orphans
+
+echo "==> Waiting for all containers to become healthy (up to 150s)"
+HEALTHY=0
+for i in $(seq 1 30); do
+  MONGO_S=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' tmzon-mongo 2>/dev/null || echo "not-found")
+  APP_S=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' tmzon-app 2>/dev/null || echo "not-found")
+  NGINX_S=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' tmzon-nginx 2>/dev/null || echo "not-found")
+
+  echo "[$(date '+%H:%M:%S')] [$i/30] mongo=$MONGO_S  app=$APP_S  nginx=$NGINX_S"
+
+  if [ "$MONGO_S" = "healthy" ] && [ "$APP_S" = "healthy" ] && [ "$NGINX_S" = "healthy" ]; then
+    echo "==> All containers are healthy!"
+    HEALTHY=1
+    break
+  fi
+
+  # Surface early failures immediately rather than waiting the full 150s
+  if [ "$MONGO_S" = "unhealthy" ] || [ "$APP_S" = "unhealthy" ] || [ "$NGINX_S" = "unhealthy" ]; then
+    echo "::warning::An unhealthy container detected at iteration $i — continuing to collect more data"
+  fi
+
+  sleep 5
+done
+
+if [ "$HEALTHY" -ne 1 ]; then
+  echo "::error::One or more containers failed to become healthy within 150s"
+  dump_logs
+  exit 1
+fi
+
+echo "==> Reloading nginx to pick up new app container IP"
+if ! docker compose exec -T nginx nginx -s reload; then
+  echo "::warning::nginx reload returned non-zero — dumping nginx logs"
+  echo "::group::nginx logs after failed reload"
+  docker compose logs nginx --tail=30
+  echo "::endgroup::"
+fi
+sleep 3
+
+echo "==> Smoke test: GET http://localhost/health (up to 30s)"
+SMOKE_OK=0
+for i in $(seq 1 6); do
+  HTTP_BODY=$(curl -sf --max-time 5 http://localhost/health 2>/dev/null || true)
+  HTTP_CODE=$(curl -o /dev/null -sw '%{http_code}' --max-time 5 http://localhost/health 2>/dev/null || echo "000")
+  echo "[$(date '+%H:%M:%S')] [$i/6] status=$HTTP_CODE body=$HTTP_BODY"
+  if [ "$HTTP_CODE" = "200" ]; then
+    echo "==> Smoke test passed"
+    SMOKE_OK=1
+    break
+  fi
+  sleep 5
+done
+
+if [ "$SMOKE_OK" -ne 1 ]; then
+  echo "::error::Smoke test failed — /health did not return 200 after 30s"
+  dump_logs
+  exit 1
+fi
+
+echo "==> Deployment complete"
+docker compose ps
+
+======END======
+out: ==> Pulling latest code
+err: From https://github.com/Turkcoder123/tmzon
+err:  * branch            main       -> FETCH_HEAD
+err:    c1e66c9..43f40fc  main       -> origin/main
+out: HEAD is now at 43f40fc Merge pull request #22 from Turkcoder123/copilot/investigate-container-health-error
+out: ==> Building frontend
+err: npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+err: npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+err: npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+err: npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+err: npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+err: npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+out: added 739 packages, and audited 740 packages in 38s
+out: 56 packages are looking for funding
+out:   run `npm fund` for details
+out: found 0 vulnerabilities
+err: npm notice
+err: npm notice New major version of npm available! 10.8.2 -> 11.12.1
+err: npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.12.1
+err: npm notice To update run: npm install -g npm@11.12.1
+err: npm notice
+out: Starting Metro Bundler
+out: Web ./index.js ░░░░░░░░░░░░░░░░  1.0% (1/1)
+out: Web ./index.js ▓░░░░░░░░░░░░░░░  9.0% (18/99)
+out: Web ./index.js ▓░░░░░░░░░░░░░░░  9.0% ( 25/141)
+out: Web ./index.js ▓▓░░░░░░░░░░░░░░ 16.5% ( 71/175)
+out: Web ./index.js ▓▓▓▓░░░░░░░░░░░░ 25.8% (131/275)
+out: Web ./index.js ▓▓▓▓▓░░░░░░░░░░░ 32.7% (177/312)
+out: Web ./index.js ▓▓▓▓▓░░░░░░░░░░░ 36.4% (198/333)
+out: Web ./index.js ▓▓▓▓▓▓░░░░░░░░░░ 40.5% (246/399)
+out: Web ./index.js ▓▓▓▓▓▓▓▓░░░░░░░░ 52.0% (323/448)
+out: Web ./index.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 64.3% (374/470)
+out: Web ./index.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 64.3% (388/497)
+out: Web ./index.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 69.0% (432/520)
+out: Web ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 76.3% (489/560)
+out: Web ./index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ 87.4% (562/601)
+out: Web Bundled 67225ms index.js (610 modules)
+out: › Assets (30):
+out: node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/AntDesign.3f78af31cca60105799838a1a7a59fbd.ttf (130 kB)
+out: node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Entypo.31b5ffea3daddc69dd01a1f3d6cf63c5.ttf (66.2 kB)
+out: node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/EvilIcons.140c53a7643ea949007aa9a282153849.ttf (13.5 kB)
+out: node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ca4b48e04dc1ce10bfbddb262c8b835f.ttf (55.6 kB)
+out: node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome.b06871f281fee6b241d60582ae9369b9.ttf (166 kB)
+out: node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome5_Brands.3b89dd103490708d19a95adcae52210e.ttf (134 kB)
+out: node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome5_Regular.1f77739ca9ff2188b539c36f30ffa2be.ttf (33.7 kB)
+out: node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome5_Solid.605ed7926cf39a2ad5ec2d1f9d391d3d.ttf (203 kB)
+out: node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome6_Brands.56c8d80832e37783f12c05db7c8849e2.ttf (209 kB)
+out: node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome6_Regular.370dd5af19f8364907b6e2c41f45dbbf.ttf (68 kB)
+out: node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome6_Solid.adec7d6f310bc577f05e8fe06a5daccf.ttf (424 kB)
+out: node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Fontisto.b49ae8ab2dbccb02c4d11caaacf09eab.ttf (314 kB)
+out: node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Foundation.e20945d7c929279ef7a6f1db184a4470.ttf (57 kB)
+out: node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf (390 kB)
+out: node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.6e435534bd35da5fef04168860a9b8fa.ttf (1.31 MB)
+out: node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.4e85bc9ebe07e0340c9c4fc2f6c38908.ttf (357 kB)
+out: node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Octicons.871378c6eab492a3e689a9385dc45a12.ttf (69.4 kB)
+out: node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/SimpleLineIcons.d2285965fe34b05465047401b8595dd0.ttf (54.1 kB)
+out: node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Zocial.1681f34aaca71b8dfb70756bca331eb2.ttf (25.8 kB)
+out: node_modules/@react-navigation/elements/lib/module/assets/back-icon-mask.0a328cd9c1afd0afe8e3b1ec5165b1b4.png (653 B)
+out: node_modules/@react-navigation/elements/lib/module/assets/back-icon.35ba0eaec5a4f5ed12ca16fabeae451d.png (207 B)
+out: node_modules/@react-navigation/elements/lib/module/assets/clear-icon.c94f6478e7ae0cdd9f15de1fcb9e5e55.png (4 variations | 425 B)
+out: node_modules/@react-navigation/elements/lib/module/assets/close-icon.808e1b1b9b53114ec2838071a7e6daa7.png (4 variations | 235 B)
+out: node_modules/@react-navigation/elements/lib/module/assets/search-icon.286d67d3f74808a60a78d3ebf1a5fb57.png (928 B)
+out: › web bundles (1):
+out: _expo/static/js/web/index-b832d89d74cf7aded9d070ff8db013d8.js (1.3 MB)
+out: › Files (3):
+out: favicon.ico (14.5 kB)
+out: index.html (1.21 kB)
+out: metadata.json (49 B)
+out: Exported: dist
+out: ==> Checking Docker
+out: Docker version 29.3.1, build c2be9cc
+out: Docker Compose version v5.1.1
+out: ==> Building and starting containers
+err:  Image mongo:6-jammy Pulling 
+err:  Image mongo:6-jammy Pulled 
+err:  Image tmzon-app Building 
+out: #1 [internal] load local bake definitions
+out: #1 reading from stdin 458B done
+out: #1 DONE 0.0s
+out: #2 [internal] load build definition from Dockerfile
+out: #2 transferring dockerfile: 217B 0.0s done
+out: #2 DONE 0.0s
+out: #3 [internal] load metadata for docker.io/library/node:18-alpine
+out: #3 DONE 0.7s
+out: #4 [internal] load .dockerignore
+out: #4 transferring context: 2B done
+out: #4 DONE 0.0s
+out: #5 [1/5] FROM docker.io/library/node:18-alpine@sha256:8d6421d663b4c28fd3ebc498332f249011d118945588d0a35cb9bc4b8ca09d9e
+out: #5 resolve docker.io/library/node:18-alpine@sha256:8d6421d663b4c28fd3ebc498332f249011d118945588d0a35cb9bc4b8ca09d9e 0.1s done
+out: #5 DONE 0.2s
+out: #6 [internal] load build context
+out: #6 transferring context: 989B 2.7s done
+out: #6 DONE 2.7s
+out: #7 [2/5] WORKDIR /app
+out: #7 CACHED
+out: #8 [3/5] COPY package*.json ./
+out: #8 CACHED
+out: #9 [4/5] RUN npm ci --omit=dev
+out: #9 CACHED
+out: #10 [5/5] COPY src ./src
+out: #10 CACHED
+out: #11 exporting to image
+out: #11 exporting layers done
+out: #11 exporting manifest sha256:da080065a1e2e38232487a6c7714fc09ff1c22438dca98e53f8425b776f6a212 done
+out: #11 exporting config sha256:84a108debf0eb6016fdd07159b8549b937870cf9f6629fb29621e7e165404427 done
+out: #11 exporting attestation manifest sha256:1c63f2dff0df77ecb58c605a7a37b5d33081cfc7bdb15e11090c13fbb0da6eac 0.0s done
+out: #11 exporting manifest list sha256:efc4848361de7e60defbe8db7bd9120d4ca3240fe9d252898d4460fd7b1c0f98 0.0s done
+out: #11 naming to docker.io/library/tmzon-app:latest
+out: #11 naming to docker.io/library/tmzon-app:latest 0.0s done
+out: #11 unpacking to docker.io/library/tmzon-app:latest 0.0s done
+out: #11 DONE 0.2s
+out: #12 resolving provenance for metadata file
+out: #12 DONE 0.0s
+err:  Image tmzon-app Built 
+err:  Container tmzon-mongo Running 
+err:  Container tmzon-app Recreate 
+err:  Container tmzon-app Recreated 
+err:  Container tmzon-nginx Running 
+err:  Container tmzon-mongo Waiting 
+err:  Container tmzon-mongo Healthy 
+err:  Container tmzon-app Starting 
+err:  Container tmzon-app Started 
+err:  Container tmzon-app Waiting 
+err:  Container tmzon-app Healthy 
+out: ==> Waiting for all containers to become healthy (up to 150s)
+out: [13:09:47] [1/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 1 — continuing to collect more data
+out: [13:09:52] [2/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 2 — continuing to collect more data
+out: [13:09:57] [3/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 3 — continuing to collect more data
+out: [13:10:02] [4/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 4 — continuing to collect more data
+out: [13:10:07] [5/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 5 — continuing to collect more data
+out: [13:10:12] [6/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 6 — continuing to collect more data
+out: [13:10:17] [7/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 7 — continuing to collect more data
+out: [13:10:22] [8/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 8 — continuing to collect more data
+out: [13:10:27] [9/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 9 — continuing to collect more data
+out: [13:10:32] [10/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 10 — continuing to collect more data
+out: [13:10:38] [11/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 11 — continuing to collect more data
+out: [13:10:43] [12/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 12 — continuing to collect more data
+out: [13:10:48] [13/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 13 — continuing to collect more data
+out: [13:10:53] [14/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 14 — continuing to collect more data
+out: [13:10:58] [15/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 15 — continuing to collect more data
+out: [13:11:03] [16/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 16 — continuing to collect more data
+out: [13:11:08] [17/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 17 — continuing to collect more data
+out: [13:11:13] [18/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 18 — continuing to collect more data
+out: [13:11:18] [19/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 19 — continuing to collect more data
+out: [13:11:24] [20/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 20 — continuing to collect more data
+out: [13:11:29] [21/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 21 — continuing to collect more data
+out: [13:11:34] [22/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 22 — continuing to collect more data
+out: [13:11:39] [23/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 23 — continuing to collect more data
+out: [13:11:44] [24/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 24 — continuing to collect more data
+out: [13:11:49] [25/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 25 — continuing to collect more data
+out: [13:11:54] [26/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 26 — continuing to collect more data
+out: [13:11:59] [27/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 27 — continuing to collect more data
+out: [13:12:04] [28/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 28 — continuing to collect more data
+out: [13:12:09] [29/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 29 — continuing to collect more data
+out: [13:12:14] [30/30] mongo=healthy  app=healthy  nginx=unhealthy
+out: ::warning::An unhealthy container detected at iteration 30 — continuing to collect more data
+out: ::error::One or more containers failed to become healthy within 150s
+out: ::group::docker compose ps
+out: NAME          IMAGE               COMMAND                  SERVICE   CREATED          STATUS                      PORTS
+out: tmzon-app     tmzon-app           "docker-entrypoint.s…"   app       2 minutes ago    Up 2 minutes (healthy)      3000/tcp
+out: tmzon-mongo   mongo:6-jammy       "docker-entrypoint.s…"   mongo     22 hours ago     Up 22 hours (healthy)       27017/tcp
+out: tmzon-nginx   nginx:1.27-alpine   "/bin/sh /entrypoint…"   nginx     20 minutes ago   Up 20 minutes (unhealthy)   0.0.0.0:80->80/tcp, [::]:80->80/tcp, 0.0.0.0:443->443/tcp, [::]:443->443/tcp
+out: ::endgroup::
+out: ::group::healthcheck details — tmzon-mongo
+out: {
+out:     "Status": "healthy",
+out:     "FailingStreak": 0,
+out:     "Log": [
+out:         {
+out:             "Start": "2026-04-02T13:11:31.302182592Z",
+out:             "End": "2026-04-02T13:11:31.898670364Z",
+out:             "ExitCode": 0,
+out:             "Output": "{ ok: 1 }\n"
+out:         },
+out:         {
+out:             "Start": "2026-04-02T13:11:41.899354742Z",
+out:             "End": "2026-04-02T13:11:42.604813803Z",
+out:             "ExitCode": 0,
+out:             "Output": "{ ok: 1 }\n"
+out:         },
+out:         {
+out:             "Start": "2026-04-02T13:11:52.607465737Z",
+out:             "End": "2026-04-02T13:11:53.213353076Z",
+out:             "ExitCode": 0,
+out:             "Output": "{ ok: 1 }\n"
+out:         },
+out:         {
+out:             "Start": "2026-04-02T13:12:03.214611288Z",
+out:             "End": "2026-04-02T13:12:03.832255188Z",
+out:             "ExitCode": 0,
+out:             "Output": "{ ok: 1 }\n"
+out:         },
+out:         {
+out:             "Start": "2026-04-02T13:12:13.833762902Z",
+out:             "End": "2026-04-02T13:12:14.477125531Z",
+out:             "ExitCode": 0,
+out:             "Output": "{ ok: 1 }\n"
+out:         }
+out:     ]
+out: }
+out: ::endgroup::
+out: ::group::logs — tmzon-mongo (last 50 lines)
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:11:42.596+00:00"},"s":"I",  "c":"NETWORK",  "id":22944,   "ctx":"conn36726","msg":"Connection ended","attr":{"remote":"127.0.0.1:40806","uuid":"9d7b8a25-9a79-4cfd-bd1a-0056e94b2e76","connectionId":36726,"connectionCount":8}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:11:42.597+00:00"},"s":"I",  "c":"NETWORK",  "id":22944,   "ctx":"conn36724","msg":"Connection ended","attr":{"remote":"127.0.0.1:40784","uuid":"68eedab9-424d-4048-8bc8-53e0bf8e8ab3","connectionId":36724,"connectionCount":7}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:11:42.598+00:00"},"s":"I",  "c":"NETWORK",  "id":22944,   "ctx":"conn36722","msg":"Connection ended","attr":{"remote":"127.0.0.1:40756","uuid":"34c3d624-12fd-4d82-83aa-0f428148bdc9","connectionId":36722,"connectionCount":6}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:11:42.598+00:00"},"s":"I",  "c":"NETWORK",  "id":22944,   "ctx":"conn36723","msg":"Connection ended","attr":{"remote":"127.0.0.1:40770","uuid":"a5723f82-3ca7-45c3-9600-6278e48cc474","connectionId":36723,"connectionCount":5}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:11:42.599+00:00"},"s":"I",  "c":"NETWORK",  "id":22944,   "ctx":"conn36725","msg":"Connection ended","attr":{"remote":"127.0.0.1:40790","uuid":"364cd6bb-0c36-463c-bc91-a13e79fb27b0","connectionId":36725,"connectionCount":4}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:11:53.098+00:00"},"s":"I",  "c":"NETWORK",  "id":22943,   "ctx":"listener","msg":"Connection accepted","attr":{"remote":"127.0.0.1:44852","uuid":"02f1dd04-e9a4-4ac3-aaa2-63aeb315bf29","connectionId":36727,"connectionCount":5}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:11:53.103+00:00"},"s":"I",  "c":"NETWORK",  "id":51800,   "ctx":"conn36727","msg":"client metadata","attr":{"remote":"127.0.0.1:44852","client":"conn36727","negotiatedCompressors":[],"doc":{"application":{"name":"mongosh 2.5.10"},"driver":{"name":"nodejs|mongosh","version":"6.19.0|2.5.10"},"platform":"Node.js v20.19.6, LE","os":{"name":"linux","architecture":"x64","version":"3.10.0-327.22.2.el7.x86_64","type":"Linux"},"env":{"container":{"runtime":"docker"}}}}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:11:53.157+00:00"},"s":"I",  "c":"NETWORK",  "id":22943,   "ctx":"listener","msg":"Connection accepted","attr":{"remote":"127.0.0.1:44856","uuid":"0591b1f1-e7c5-4ab8-97de-bb899f00e03c","connectionId":36728,"connectionCount":6}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:11:53.158+00:00"},"s":"I",  "c":"NETWORK",  "id":22943,   "ctx":"listener","msg":"Connection accepted","attr":{"remote":"127.0.0.1:44870","uuid":"0f99abeb-981a-49db-bdba-d5dcee0daced","connectionId":36729,"connectionCount":7}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:11:53.160+00:00"},"s":"I",  "c":"NETWORK",  "id":51800,   "ctx":"conn36728","msg":"client metadata","attr":{"remote":"127.0.0.1:44856","client":"conn36728","negotiatedCompressors":[],"doc":{"application":{"name":"mongosh 2.5.10"},"driver":{"name":"nodejs|mongosh","version":"6.19.0|2.5.10"},"platform":"Node.js v20.19.6, LE","os":{"name":"linux","architecture":"x64","version":"3.10.0-327.22.2.el7.x86_64","type":"Linux"},"env":{"container":{"runtime":"docker"}}}}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:11:53.161+00:00"},"s":"I",  "c":"NETWORK",  "id":51800,   "ctx":"conn36729","msg":"client metadata","attr":{"remote":"127.0.0.1:44870","client":"conn36729","negotiatedCompressors":[],"doc":{"application":{"name":"mongosh 2.5.10"},"driver":{"name":"nodejs|mongosh","version":"6.19.0|2.5.10"},"platform":"Node.js v20.19.6, LE","os":{"name":"linux","architecture":"x64","version":"3.10.0-327.22.2.el7.x86_64","type":"Linux"},"env":{"container":{"runtime":"docker"}}}}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:11:53.164+00:00"},"s":"I",  "c":"NETWORK",  "id":22943,   "ctx":"listener","msg":"Connection accepted","attr":{"remote":"127.0.0.1:44876","uuid":"36167a9f-9613-4ea3-8b2b-1313e44d1a02","connectionId":36730,"connectionCount":8}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:11:53.166+00:00"},"s":"I",  "c":"NETWORK",  "id":22943,   "ctx":"listener","msg":"Connection accepted","attr":{"remote":"127.0.0.1:44884","uuid":"478a3128-9540-4dcf-b40b-3cfb4680696b","connectionId":36731,"connectionCount":9}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:11:53.170+00:00"},"s":"I",  "c":"NETWORK",  "id":51800,   "ctx":"conn36730","msg":"client metadata","attr":{"remote":"127.0.0.1:44876","client":"conn36730","negotiatedCompressors":[],"doc":{"application":{"name":"mongosh 2.5.10"},"driver":{"name":"nodejs|mongosh","version":"6.19.0|2.5.10"},"platform":"Node.js v20.19.6, LE","os":{"name":"linux","architecture":"x64","version":"3.10.0-327.22.2.el7.x86_64","type":"Linux"},"env":{"container":{"runtime":"docker"}}}}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:11:53.171+00:00"},"s":"I",  "c":"NETWORK",  "id":51800,   "ctx":"conn36731","msg":"client metadata","attr":{"remote":"127.0.0.1:44884","client":"conn36731","negotiatedCompressors":[],"doc":{"application":{"name":"mongosh 2.5.10"},"driver":{"name":"nodejs|mongosh","version":"6.19.0|2.5.10"},"platform":"Node.js v20.19.6, LE","os":{"name":"linux","architecture":"x64","version":"3.10.0-327.22.2.el7.x86_64","type":"Linux"},"env":{"container":{"runtime":"docker"}}}}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:11:53.209+00:00"},"s":"I",  "c":"NETWORK",  "id":22944,   "ctx":"conn36731","msg":"Connection ended","attr":{"remote":"127.0.0.1:44884","uuid":"478a3128-9540-4dcf-b40b-3cfb4680696b","connectionId":36731,"connectionCount":8}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:11:53.209+00:00"},"s":"I",  "c":"NETWORK",  "id":22944,   "ctx":"conn36730","msg":"Connection ended","attr":{"remote":"127.0.0.1:44876","uuid":"36167a9f-9613-4ea3-8b2b-1313e44d1a02","connectionId":36730,"connectionCount":7}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:11:53.210+00:00"},"s":"I",  "c":"NETWORK",  "id":22944,   "ctx":"conn36729","msg":"Connection ended","attr":{"remote":"127.0.0.1:44870","uuid":"0f99abeb-981a-49db-bdba-d5dcee0daced","connectionId":36729,"connectionCount":6}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:11:53.210+00:00"},"s":"I",  "c":"NETWORK",  "id":22944,   "ctx":"conn36728","msg":"Connection ended","attr":{"remote":"127.0.0.1:44856","uuid":"0591b1f1-e7c5-4ab8-97de-bb899f00e03c","connectionId":36728,"connectionCount":5}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:11:53.211+00:00"},"s":"I",  "c":"NETWORK",  "id":22944,   "ctx":"conn36727","msg":"Connection ended","attr":{"remote":"127.0.0.1:44852","uuid":"02f1dd04-e9a4-4ac3-aaa2-63aeb315bf29","connectionId":36727,"connectionCount":4}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:03.704+00:00"},"s":"I",  "c":"NETWORK",  "id":22943,   "ctx":"listener","msg":"Connection accepted","attr":{"remote":"127.0.0.1:36168","uuid":"57f9072e-342f-40b7-862d-876be61160fe","connectionId":36732,"connectionCount":5}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:03.708+00:00"},"s":"I",  "c":"NETWORK",  "id":51800,   "ctx":"conn36732","msg":"client metadata","attr":{"remote":"127.0.0.1:36168","client":"conn36732","negotiatedCompressors":[],"doc":{"application":{"name":"mongosh 2.5.10"},"driver":{"name":"nodejs|mongosh","version":"6.19.0|2.5.10"},"platform":"Node.js v20.19.6, LE","os":{"name":"linux","architecture":"x64","version":"3.10.0-327.22.2.el7.x86_64","type":"Linux"},"env":{"container":{"runtime":"docker"}}}}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:03.774+00:00"},"s":"I",  "c":"NETWORK",  "id":22943,   "ctx":"listener","msg":"Connection accepted","attr":{"remote":"127.0.0.1:36178","uuid":"4bc87f40-fa93-4156-bd37-d04f8f51a876","connectionId":36733,"connectionCount":6}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:03.774+00:00"},"s":"I",  "c":"NETWORK",  "id":22943,   "ctx":"listener","msg":"Connection accepted","attr":{"remote":"127.0.0.1:36184","uuid":"63b17741-e4cb-4d53-adc5-0473fc21b19a","connectionId":36734,"connectionCount":7}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:03.777+00:00"},"s":"I",  "c":"NETWORK",  "id":51800,   "ctx":"conn36733","msg":"client metadata","attr":{"remote":"127.0.0.1:36178","client":"conn36733","negotiatedCompressors":[],"doc":{"application":{"name":"mongosh 2.5.10"},"driver":{"name":"nodejs|mongosh","version":"6.19.0|2.5.10"},"platform":"Node.js v20.19.6, LE","os":{"name":"linux","architecture":"x64","version":"3.10.0-327.22.2.el7.x86_64","type":"Linux"},"env":{"container":{"runtime":"docker"}}}}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:03.778+00:00"},"s":"I",  "c":"NETWORK",  "id":51800,   "ctx":"conn36734","msg":"client metadata","attr":{"remote":"127.0.0.1:36184","client":"conn36734","negotiatedCompressors":[],"doc":{"application":{"name":"mongosh 2.5.10"},"driver":{"name":"nodejs|mongosh","version":"6.19.0|2.5.10"},"platform":"Node.js v20.19.6, LE","os":{"name":"linux","architecture":"x64","version":"3.10.0-327.22.2.el7.x86_64","type":"Linux"},"env":{"container":{"runtime":"docker"}}}}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:03.781+00:00"},"s":"I",  "c":"NETWORK",  "id":22943,   "ctx":"listener","msg":"Connection accepted","attr":{"remote":"127.0.0.1:36200","uuid":"5ff2443b-803a-45a5-9def-1b1e534f8598","connectionId":36735,"connectionCount":8}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:03.782+00:00"},"s":"I",  "c":"NETWORK",  "id":22943,   "ctx":"listener","msg":"Connection accepted","attr":{"remote":"127.0.0.1:36214","uuid":"b1749847-fda2-40dd-8389-f185c9b53300","connectionId":36736,"connectionCount":9}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:03.787+00:00"},"s":"I",  "c":"NETWORK",  "id":51800,   "ctx":"conn36735","msg":"client metadata","attr":{"remote":"127.0.0.1:36200","client":"conn36735","negotiatedCompressors":[],"doc":{"application":{"name":"mongosh 2.5.10"},"driver":{"name":"nodejs|mongosh","version":"6.19.0|2.5.10"},"platform":"Node.js v20.19.6, LE","os":{"name":"linux","architecture":"x64","version":"3.10.0-327.22.2.el7.x86_64","type":"Linux"},"env":{"container":{"runtime":"docker"}}}}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:03.788+00:00"},"s":"I",  "c":"NETWORK",  "id":51800,   "ctx":"conn36736","msg":"client metadata","attr":{"remote":"127.0.0.1:36214","client":"conn36736","negotiatedCompressors":[],"doc":{"application":{"name":"mongosh 2.5.10"},"driver":{"name":"nodejs|mongosh","version":"6.19.0|2.5.10"},"platform":"Node.js v20.19.6, LE","os":{"name":"linux","architecture":"x64","version":"3.10.0-327.22.2.el7.x86_64","type":"Linux"},"env":{"container":{"runtime":"docker"}}}}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:03.828+00:00"},"s":"I",  "c":"NETWORK",  "id":22944,   "ctx":"conn36736","msg":"Connection ended","attr":{"remote":"127.0.0.1:36214","uuid":"b1749847-fda2-40dd-8389-f185c9b53300","connectionId":36736,"connectionCount":8}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:03.829+00:00"},"s":"I",  "c":"NETWORK",  "id":22944,   "ctx":"conn36735","msg":"Connection ended","attr":{"remote":"127.0.0.1:36200","uuid":"5ff2443b-803a-45a5-9def-1b1e534f8598","connectionId":36735,"connectionCount":7}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:03.829+00:00"},"s":"I",  "c":"NETWORK",  "id":22944,   "ctx":"conn36733","msg":"Connection ended","attr":{"remote":"127.0.0.1:36178","uuid":"4bc87f40-fa93-4156-bd37-d04f8f51a876","connectionId":36733,"connectionCount":6}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:03.830+00:00"},"s":"I",  "c":"NETWORK",  "id":22944,   "ctx":"conn36734","msg":"Connection ended","attr":{"remote":"127.0.0.1:36184","uuid":"63b17741-e4cb-4d53-adc5-0473fc21b19a","connectionId":36734,"connectionCount":5}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:03.830+00:00"},"s":"I",  "c":"NETWORK",  "id":22944,   "ctx":"conn36732","msg":"Connection ended","attr":{"remote":"127.0.0.1:36168","uuid":"57f9072e-342f-40b7-862d-876be61160fe","connectionId":36732,"connectionCount":4}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:14.372+00:00"},"s":"I",  "c":"NETWORK",  "id":22943,   "ctx":"listener","msg":"Connection accepted","attr":{"remote":"127.0.0.1:52986","uuid":"9f884944-9c99-46a6-b886-4e4db48fd6be","connectionId":36737,"connectionCount":5}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:14.377+00:00"},"s":"I",  "c":"NETWORK",  "id":51800,   "ctx":"conn36737","msg":"client metadata","attr":{"remote":"127.0.0.1:52986","client":"conn36737","negotiatedCompressors":[],"doc":{"application":{"name":"mongosh 2.5.10"},"driver":{"name":"nodejs|mongosh","version":"6.19.0|2.5.10"},"platform":"Node.js v20.19.6, LE","os":{"name":"linux","architecture":"x64","version":"3.10.0-327.22.2.el7.x86_64","type":"Linux"},"env":{"container":{"runtime":"docker"}}}}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:14.428+00:00"},"s":"I",  "c":"NETWORK",  "id":22943,   "ctx":"listener","msg":"Connection accepted","attr":{"remote":"127.0.0.1:52994","uuid":"f4857328-8100-4d49-961a-e870cd0d2c12","connectionId":36738,"connectionCount":6}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:14.429+00:00"},"s":"I",  "c":"NETWORK",  "id":22943,   "ctx":"listener","msg":"Connection accepted","attr":{"remote":"127.0.0.1:53008","uuid":"f6e24386-28d0-4f44-b352-8e5c49b6d9c4","connectionId":36739,"connectionCount":7}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:14.431+00:00"},"s":"I",  "c":"NETWORK",  "id":51800,   "ctx":"conn36738","msg":"client metadata","attr":{"remote":"127.0.0.1:52994","client":"conn36738","negotiatedCompressors":[],"doc":{"application":{"name":"mongosh 2.5.10"},"driver":{"name":"nodejs|mongosh","version":"6.19.0|2.5.10"},"platform":"Node.js v20.19.6, LE","os":{"name":"linux","architecture":"x64","version":"3.10.0-327.22.2.el7.x86_64","type":"Linux"},"env":{"container":{"runtime":"docker"}}}}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:14.431+00:00"},"s":"I",  "c":"NETWORK",  "id":51800,   "ctx":"conn36739","msg":"client metadata","attr":{"remote":"127.0.0.1:53008","client":"conn36739","negotiatedCompressors":[],"doc":{"application":{"name":"mongosh 2.5.10"},"driver":{"name":"nodejs|mongosh","version":"6.19.0|2.5.10"},"platform":"Node.js v20.19.6, LE","os":{"name":"linux","architecture":"x64","version":"3.10.0-327.22.2.el7.x86_64","type":"Linux"},"env":{"container":{"runtime":"docker"}}}}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:14.434+00:00"},"s":"I",  "c":"NETWORK",  "id":22943,   "ctx":"listener","msg":"Connection accepted","attr":{"remote":"127.0.0.1:53020","uuid":"25da5a0a-ea88-450a-aebe-da61698e0d89","connectionId":36740,"connectionCount":8}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:14.436+00:00"},"s":"I",  "c":"NETWORK",  "id":22943,   "ctx":"listener","msg":"Connection accepted","attr":{"remote":"127.0.0.1:53036","uuid":"2d0320a8-616c-49ee-a16e-be263d72a30d","connectionId":36741,"connectionCount":9}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:14.439+00:00"},"s":"I",  "c":"NETWORK",  "id":51800,   "ctx":"conn36740","msg":"client metadata","attr":{"remote":"127.0.0.1:53020","client":"conn36740","negotiatedCompressors":[],"doc":{"application":{"name":"mongosh 2.5.10"},"driver":{"name":"nodejs|mongosh","version":"6.19.0|2.5.10"},"platform":"Node.js v20.19.6, LE","os":{"name":"linux","architecture":"x64","version":"3.10.0-327.22.2.el7.x86_64","type":"Linux"},"env":{"container":{"runtime":"docker"}}}}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:14.440+00:00"},"s":"I",  "c":"NETWORK",  "id":51800,   "ctx":"conn36741","msg":"client metadata","attr":{"remote":"127.0.0.1:53036","client":"conn36741","negotiatedCompressors":[],"doc":{"application":{"name":"mongosh 2.5.10"},"driver":{"name":"nodejs|mongosh","version":"6.19.0|2.5.10"},"platform":"Node.js v20.19.6, LE","os":{"name":"linux","architecture":"x64","version":"3.10.0-327.22.2.el7.x86_64","type":"Linux"},"env":{"container":{"runtime":"docker"}}}}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:14.471+00:00"},"s":"I",  "c":"NETWORK",  "id":22944,   "ctx":"conn36741","msg":"Connection ended","attr":{"remote":"127.0.0.1:53036","uuid":"2d0320a8-616c-49ee-a16e-be263d72a30d","connectionId":36741,"connectionCount":8}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:14.471+00:00"},"s":"I",  "c":"NETWORK",  "id":22944,   "ctx":"conn36740","msg":"Connection ended","attr":{"remote":"127.0.0.1:53020","uuid":"25da5a0a-ea88-450a-aebe-da61698e0d89","connectionId":36740,"connectionCount":7}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:14.472+00:00"},"s":"I",  "c":"NETWORK",  "id":22944,   "ctx":"conn36739","msg":"Connection ended","attr":{"remote":"127.0.0.1:53008","uuid":"f6e24386-28d0-4f44-b352-8e5c49b6d9c4","connectionId":36739,"connectionCount":6}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:14.472+00:00"},"s":"I",  "c":"NETWORK",  "id":22944,   "ctx":"conn36738","msg":"Connection ended","attr":{"remote":"127.0.0.1:52994","uuid":"f4857328-8100-4d49-961a-e870cd0d2c12","connectionId":36738,"connectionCount":5}}
+out: tmzon-mongo  | {"t":{"$date":"2026-04-02T13:12:14.473+00:00"},"s":"I",  "c":"NETWORK",  "id":22944,   "ctx":"conn36737","msg":"Connection ended","attr":{"remote":"127.0.0.1:52986","uuid":"9f884944-9c99-46a6-b886-4e4db48fd6be","connectionId":36737,"connectionCount":4}}
+out: ::endgroup::
+out: ::group::healthcheck details — tmzon-app
+out: {
+out:     "Status": "healthy",
+out:     "FailingStreak": 0,
+out:     "Log": [
+out:         {
+out:             "Start": "2026-04-02T13:11:58.444397599Z",
+out:             "End": "2026-04-02T13:11:58.514837314Z",
+out:             "ExitCode": 0,
+out:             "Output": "{\"status\":\"ok\",\"timestamp\":\"2026-04-02T13:11:58.512Z\"}"
+out:         },
+out:         {
+out:             "Start": "2026-04-02T13:12:03.515863179Z",
+out:             "End": "2026-04-02T13:12:03.62511464Z",
+out:             "ExitCode": 0,
+out:             "Output": "{\"status\":\"ok\",\"timestamp\":\"2026-04-02T13:12:03.618Z\"}"
+out:         },
+out:         {
+out:             "Start": "2026-04-02T13:12:08.626344043Z",
+out:             "End": "2026-04-02T13:12:08.688337675Z",
+out:             "ExitCode": 0,
+out:             "Output": "{\"status\":\"ok\",\"timestamp\":\"2026-04-02T13:12:08.685Z\"}"
+out:         },
+out:         {
+out:             "Start": "2026-04-02T13:12:13.688928579Z",
+out:             "End": "2026-04-02T13:12:13.74309066Z",
+out:             "ExitCode": 0,
+out:             "Output": "{\"status\":\"ok\",\"timestamp\":\"2026-04-02T13:12:13.741Z\"}"
+out:         },
+out:         {
+out:             "Start": "2026-04-02T13:12:18.74443299Z",
+out:             "End": "2026-04-02T13:12:18.811810775Z",
+out:             "ExitCode": 0,
+out:             "Output": "{\"status\":\"ok\",\"timestamp\":\"2026-04-02T13:12:18.807Z\"}"
+out:         }
+out:     ]
+out: }
+out: ::endgroup::
+out: ::group::logs — tmzon-app (last 50 lines)
+out: tmzon-app  | [2026-04-02T13:09:43.465Z] INFO  Server running on port 3000 {"env":"production"}
+out: tmzon-app  | [2026-04-02T13:09:43.520Z] INFO  MongoDB connected {"uri":"mongodb://mongo:27017/tmzon"}
+out: tmzon-app  | [2026-04-02T13:09:46.536Z] INFO  ::1 - - [02/Apr/2026:13:09:46 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:09:51.631Z] INFO  ::1 - - [02/Apr/2026:13:09:51 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:09:56.690Z] INFO  ::1 - - [02/Apr/2026:13:09:56 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:10:01.785Z] INFO  ::1 - - [02/Apr/2026:13:10:01 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:10:06.865Z] INFO  ::1 - - [02/Apr/2026:13:10:06 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:10:11.927Z] INFO  ::1 - - [02/Apr/2026:13:10:11 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:10:17.042Z] INFO  ::1 - - [02/Apr/2026:13:10:17 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:10:22.105Z] INFO  ::1 - - [02/Apr/2026:13:10:22 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:10:27.269Z] INFO  ::1 - - [02/Apr/2026:13:10:27 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:10:32.350Z] INFO  ::1 - - [02/Apr/2026:13:10:32 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:10:37.418Z] INFO  ::1 - - [02/Apr/2026:13:10:37 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:10:42.495Z] INFO  ::1 - - [02/Apr/2026:13:10:42 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:10:47.566Z] INFO  ::1 - - [02/Apr/2026:13:10:47 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:10:52.647Z] INFO  ::1 - - [02/Apr/2026:13:10:52 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:10:57.699Z] INFO  ::1 - - [02/Apr/2026:13:10:57 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:11:02.762Z] INFO  ::1 - - [02/Apr/2026:13:11:02 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:11:07.827Z] INFO  ::1 - - [02/Apr/2026:13:11:07 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:11:12.937Z] INFO  ::1 - - [02/Apr/2026:13:11:12 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:11:18.017Z] INFO  ::1 - - [02/Apr/2026:13:11:18 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:11:23.078Z] INFO  ::1 - - [02/Apr/2026:13:11:23 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:11:28.135Z] INFO  ::1 - - [02/Apr/2026:13:11:28 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:11:33.197Z] INFO  ::1 - - [02/Apr/2026:13:11:33 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:11:38.249Z] INFO  ::1 - - [02/Apr/2026:13:11:38 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:11:43.314Z] INFO  ::1 - - [02/Apr/2026:13:11:43 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:11:48.372Z] INFO  ::1 - - [02/Apr/2026:13:11:48 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:11:53.439Z] INFO  ::1 - - [02/Apr/2026:13:11:53 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:11:58.513Z] INFO  ::1 - - [02/Apr/2026:13:11:58 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:12:03.621Z] INFO  ::1 - - [02/Apr/2026:13:12:03 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:12:08.685Z] INFO  ::1 - - [02/Apr/2026:13:12:08 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:12:13.743Z] INFO  ::1 - - [02/Apr/2026:13:12:13 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: tmzon-app  | [2026-04-02T13:12:18.809Z] INFO  ::1 - - [02/Apr/2026:13:12:18 +0000] "GET /health HTTP/1.1" 200 54 "-" "Wget"
+out: ::endgroup::
+out: ::group::healthcheck details — tmzon-nginx
+out: {
+out:     "Status": "unhealthy",
+out:     "FailingStreak": 231,
+out:     "Log": [
+out:         {
+out:             "Start": "2026-04-02T13:11:57.050843742Z",
+out:             "End": "2026-04-02T13:11:57.133591461Z",
+out:             "ExitCode": 1,
+out:             "Output": "wget: can't connect to remote host: Connection refused\n"
+out:         },
+out:         {
+out:             "Start": "2026-04-02T13:12:02.13466058Z",
+out:             "End": "2026-04-02T13:12:02.220019946Z",
+out:             "ExitCode": 1,
+out:             "Output": "wget: can't connect to remote host: Connection refused\n"
+out:         },
+out:         {
+out:             "Start": "2026-04-02T13:12:07.221403205Z",
+out:             "End": "2026-04-02T13:12:07.285110373Z",
+out:             "ExitCode": 1,
+out:             "Output": "wget: can't connect to remote host: Connection refused\n"
+out:         },
+out:         {
+out:             "Start": "2026-04-02T13:12:12.286715279Z",
+out:             "End": "2026-04-02T13:12:12.346117045Z",
+out:             "ExitCode": 1,
+out:             "Output": "wget: can't connect to remote host: Connection refused\n"
+out:         },
+out:         {
+out:             "Start": "2026-04-02T13:12:17.34719305Z",
+out:             "End": "2026-04-02T13:12:17.414384306Z",
+out:             "ExitCode": 1,
+out:             "Output": "wget: can't connect to remote host: Connection refused\n"
+out:         }
+out:     ]
+out: }
+out: ::endgroup::
+out: ::group::logs — tmzon-nginx (last 50 lines)
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:02 +0000] "GET /wp-content/themes/admin.php HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:02 +0000] "GET /admin.php HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:02 +0000] "GET /ioxi-o.php HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:02 +0000] "GET /index/function.php HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:03 +0000] "GET /adminfuns.php HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:03 +0000] "GET /wp-content/cache/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:03 +0000] "GET /wp-includes/js/thickbox/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:03 +0000] "GET /goods.php HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:03 +0000] "GET /sf.php HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:04 +0000] "GET /wp-admin/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:04 +0000] "GET /wp-admin/images/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:04 +0000] "GET /wp-content/admin.php HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:04 +0000] "GET /wp-content/uploads/admin.php HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:05 +0000] "GET /wp-includes/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:05 +0000] "GET /wp-includes/css/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:05 +0000] "GET /wp-includes/js/plupload/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:05 +0000] "GET /.well-known/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:06 +0000] "GET /222.php HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:06 +0000] "GET /abcd.php HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:06 +0000] "GET /class-t.api.php HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:06 +0000] "GET /classwithtostring.php HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:06 +0000] "GET /file.php HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:07 +0000] "GET /info.php HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:07 +0000] "GET /wp-admin/css/colors/coffee/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:07 +0000] "GET /wp-admin/js/widgets/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:07 +0000] "GET /wp-content/languages/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:08 +0000] "GET /wp-content/languages/plugins/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:08 +0000] "GET /wp-content/themes/twentytwentyfour/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:08 +0000] "GET /wp-content/upgrade/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:08 +0000] "GET /wp-content/uploads/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:08 +0000] "GET /wp-good.php HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:09 +0000] "GET /wp-includes/js/jquery/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:09 +0000] "GET /wp-includes/js/jquery/ui/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:09 +0000] "GET /wp-includes/js/tinymce/themes/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:09 +0000] "GET /wp-includes/rest-api/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:10 +0000] "GET /wp-includes/ID3/index.php HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:10 +0000] "GET /wp-includes/fonts/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:10 +0000] "GET /wordpress/wp-admin/maint/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 104.22.66.21 - - [02/Apr/2026:13:01:10 +0000] "GET /cgi-bin/ HTTP/1.1" 200 1211 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" "20.212.0.99"
+out: tmzon-nginx  | 204.76.203.18 - - [02/Apr/2026:13:02:06 +0000] "GET /whoareyou/dwajiow/dopenewsman/wewe2.johnsmith HTTP/1.1" 200 1211 "-" "-" "-"
+out: tmzon-nginx  | 204.76.203.18 - - [02/Apr/2026:13:03:06 +0000] "GET /whoareyou/dwajiow/dopenewsman/wewe3.johnsmith HTTP/1.1" 200 1211 "-" "-" "-"
+out: tmzon-nginx  | 204.76.203.18 - - [02/Apr/2026:13:04:14 +0000] "GET /whoareyou/dwajiow/dopenewsman/wewe6.johnsmith HTTP/1.1" 200 1211 "-" "-" "-"
+out: tmzon-nginx  | 204.76.203.18 - - [02/Apr/2026:13:05:34 +0000] "GET /whoareyou/dwajiow/dopenewsman/wewe11.johnsmith HTTP/1.1" 200 1211 "-" "-" "-"
+out: tmzon-nginx  | 204.76.203.18 - - [02/Apr/2026:13:06:14 +0000] "GET /whoareyou/dwajiow/dopenewsman/wewe13.johnsmith HTTP/1.1" 200 1211 "-" "-" "-"
+out: tmzon-nginx  | 204.76.203.18 - - [02/Apr/2026:13:07:46 +0000] "GET /whoareyou/dwajiow/dopenewsman/wewe12.johnsmith HTTP/1.1" 200 1211 "-" "-" "-"
+out: tmzon-nginx  | 204.76.203.18 - - [02/Apr/2026:13:07:58 +0000] "GET /whoareyou/dwajiow/dopenewsman/wewe9.johnsmith HTTP/1.1" 200 1211 "-" "-" "-"
+Error: zon-nginx  | 2026/04/02 13:11:39 [error] 10#10: *21 rewrite or internal redirection cycle while internally redirecting to "/index.html", client: 162.158.41.84, server: _, request: "GET /robots.txt HTTP/1.1", host: "lanafurainvestments.click"
+out: tmzon-nginx  | 162.158.41.84 - - [02/Apr/2026:13:11:39 +0000] "GET /robots.txt HTTP/1.1" 500 177 "-" "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" "66.249.79.35"
+Error: zon-nginx  | 2026/04/02 13:11:55 [error] 10#10: *22 rewrite or internal redirection cycle while internally redirecting to "/index.html", client: 204.76.203.18, server: _, request: "GET /whoareyou/dwajiow/dopenewsman/wewe8.johnsmith HTTP/1.1", host: "***"
+out: tmzon-nginx  | 204.76.203.18 - - [02/Apr/2026:13:11:55 +0000] "GET /whoareyou/dwajiow/dopenewsman/wewe8.johnsmith HTTP/1.1" 500 177 "-" "-" "-"
+2026/04/02 13:12:21 Process exited with status 1
+out: ::endgroup::
+0s
+0s
