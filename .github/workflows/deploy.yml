@@ -105,31 +105,89 @@ jobs:
             docker --version
             docker compose version 2>/dev/null || docker-compose --version
 
+            # ── helper: dump full diagnostics for all services ─────────────────
+            dump_logs() {
+              echo "::group::docker compose ps"
+              docker compose ps
+              echo "::endgroup::"
+
+              for svc in mongo app nginx; do
+                name="tmzon-${svc}"
+                echo "::group::healthcheck details — ${name}"
+                docker inspect --format='{{json .State.Health}}' "$name" 2>/dev/null \
+                  | python3 -m json.tool 2>/dev/null \
+                  || docker inspect --format='{{json .State.Health}}' "$name" 2>/dev/null \
+                  || echo "(container not found)"
+                echo "::endgroup::"
+
+                echo "::group::logs — ${name} (last 50 lines)"
+                docker compose logs "$svc" --tail=50 2>/dev/null || echo "(no logs)"
+                echo "::endgroup::"
+              done
+            }
+            # ──────────────────────────────────────────────────────────────────
+
             echo "==> Building and starting containers"
             docker compose pull mongo
-            docker compose up -d --build --remove-orphans --wait
+            docker compose up -d --build --remove-orphans
 
-            echo "==> Reloading nginx to pick up new app container IP"
-            docker compose exec -T nginx nginx -s reload
-            sleep 3
+            echo "==> Waiting for all containers to become healthy (up to 150s)"
+            HEALTHY=0
+            for i in $(seq 1 30); do
+              MONGO_S=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' tmzon-mongo 2>/dev/null || echo "not-found")
+              APP_S=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' tmzon-app 2>/dev/null || echo "not-found")
+              NGINX_S=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' tmzon-nginx 2>/dev/null || echo "not-found")
 
-            echo "==> Smoke test (waiting up to 30s for app to be ready)"
-            for i in $(seq 1 6); do
-              if curl -sf http://localhost/health; then
-                echo "Health check passed"
+              echo "[$(date '+%H:%M:%S')] [$i/30] mongo=$MONGO_S  app=$APP_S  nginx=$NGINX_S"
+
+              if [ "$MONGO_S" = "healthy" ] && [ "$APP_S" = "healthy" ] && [ "$NGINX_S" = "healthy" ]; then
+                echo "==> All containers are healthy!"
+                HEALTHY=1
                 break
               fi
-              if [ "$i" -eq 6 ]; then
-                echo "Health check failed after 30s"
-                echo "--- app logs ---"
-                docker compose logs app --tail=20
-                echo "--- nginx logs ---"
-                docker compose logs nginx --tail=20
-                exit 1
+
+              # Surface early failures immediately rather than waiting the full 150s
+              if [ "$MONGO_S" = "unhealthy" ] || [ "$APP_S" = "unhealthy" ] || [ "$NGINX_S" = "unhealthy" ]; then
+                echo "::warning::An unhealthy container detected at iteration $i — continuing to collect more data"
               fi
-              echo "Waiting... ($i/6)"
+
               sleep 5
             done
+
+            if [ "$HEALTHY" -ne 1 ]; then
+              echo "::error::One or more containers failed to become healthy within 150s"
+              dump_logs
+              exit 1
+            fi
+
+            echo "==> Reloading nginx to pick up new app container IP"
+            if ! docker compose exec -T nginx nginx -s reload; then
+              echo "::warning::nginx reload returned non-zero — dumping nginx logs"
+              echo "::group::nginx logs after failed reload"
+              docker compose logs nginx --tail=30
+              echo "::endgroup::"
+            fi
+            sleep 3
+
+            echo "==> Smoke test: GET http://localhost/health (up to 30s)"
+            SMOKE_OK=0
+            for i in $(seq 1 6); do
+              HTTP_BODY=$(curl -sf --max-time 5 http://localhost/health 2>/dev/null || true)
+              HTTP_CODE=$(curl -o /dev/null -sw '%{http_code}' --max-time 5 http://localhost/health 2>/dev/null || echo "000")
+              echo "[$(date '+%H:%M:%S')] [$i/6] status=$HTTP_CODE body=$HTTP_BODY"
+              if [ "$HTTP_CODE" = "200" ]; then
+                echo "==> Smoke test passed"
+                SMOKE_OK=1
+                break
+              fi
+              sleep 5
+            done
+
+            if [ "$SMOKE_OK" -ne 1 ]; then
+              echo "::error::Smoke test failed — /health did not return 200 after 30s"
+              dump_logs
+              exit 1
+            fi
 
             echo "==> Deployment complete"
             docker compose ps
