@@ -155,7 +155,7 @@ export default function SessionsScreen({ navigation }) {
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <FlatList
         data={sessions}
-        keyExtractor={(item) => item._id || item.id || String(Math.random())}
+        keyExtractor={(item, index) => item._id || item.id || String(index)}
         renderItem={renderSession}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={

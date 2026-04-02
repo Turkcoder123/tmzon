@@ -74,15 +74,17 @@ export default function ProfileScreen({ route, navigation }) {
     setFollowLoading(true);
     try {
       const data = await api.toggleFollow(targetUsername);
-      setIsFollowingUser(data.following);
-      setProfile((p) => ({
-        ...p,
-        followers: data.following
-          ? [...(Array.isArray(p.followers) ? p.followers : []), { _id: user?.userId }]
-          : (Array.isArray(p.followers) ? p.followers : []).filter(
-              (f) => (f._id || f.id || f) !== user?.userId
-            ),
-      }));
+      if (typeof data.following === 'boolean') {
+        setIsFollowingUser(data.following);
+        setProfile((p) => ({
+          ...p,
+          followers: data.following
+            ? [...(Array.isArray(p.followers) ? p.followers : []), { _id: user?.userId }]
+            : (Array.isArray(p.followers) ? p.followers : []).filter(
+                (f) => (f._id || f.id || f) !== user?.userId
+              ),
+        }));
+      }
     } catch (e) {
       Alert.alert('Hata', e.message || 'Takip işlemi başarısız');
     }

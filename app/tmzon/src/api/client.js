@@ -58,9 +58,9 @@ async function request(endpoint, options = {}) {
       headers['Authorization'] = `Bearer ${newToken}`;
       res = await fetch(url, {
         ...options,
+        _retried: true,
         headers,
         body: options.body ? JSON.stringify(options.body) : undefined,
-        _retried: true,
       });
     }
   }
