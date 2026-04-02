@@ -30,7 +30,7 @@ services:
       - PORT=3000
       - MONGO_URI=mongodb://mongo:27017/tmzon
       - JWT_SECRET=${JWT_SECRET:-changeme_secret}
-      - FRONTEND_URL=${FRONTEND_URL:-https://tmzon.tech}
+      - FRONTEND_URL=${FRONTEND_URL:-https://tmzon.tech,http://144.172.107.118}
     depends_on:
       mongo:
         condition: service_healthy
