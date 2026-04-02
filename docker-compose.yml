@@ -15,7 +15,8 @@ services:
       - /var/www/certbot:/var/www/certbot:ro
       - ./app/tmzon/dist:/usr/share/nginx/html:ro
     depends_on:
-      - app
+      app:
+        condition: service_healthy
     logging:
       driver: json-file
       options:
@@ -37,6 +38,12 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3000/health']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     logging:
       driver: json-file
       options:
