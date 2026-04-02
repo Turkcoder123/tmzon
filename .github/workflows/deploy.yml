@@ -95,10 +95,11 @@ jobs:
             fi
 
             echo "==> Building frontend"
-            cd "$APP_DIR/app/tmzon"
-            npm ci --prefer-offline
-            npx expo export --platform web
-            cd "$APP_DIR"
+            docker run --rm \
+              -v "$APP_DIR/app/tmzon:/work" \
+              -w /work \
+              node:20-alpine \
+              sh -c "npm ci --prefer-offline && npx expo export --platform web"
 
             echo "==> Checking Docker"
             docker --version
