@@ -3,11 +3,14 @@ services:
     image: nginx:1.27-alpine
     container_name: tmzon-nginx
     restart: unless-stopped
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
     ports:
       - '80:80'
       - '443:443'
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/entrypoint.sh:/entrypoint.sh:ro
+      - ./nginx/nginx.conf:/etc/nginx/templates/nginx.conf:ro
+      - ./nginx/nginx-ssl.conf:/etc/nginx/templates/nginx-ssl.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - /var/www/certbot:/var/www/certbot:ro
       - ./app/tmzon/dist:/usr/share/nginx/html:ro
