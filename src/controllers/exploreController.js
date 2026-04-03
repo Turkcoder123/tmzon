@@ -91,7 +91,8 @@ exports.search = async (req, res) => {
     }
 
     const query = q.trim();
-    const regex = new RegExp(query, 'i');
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, 'i');
 
     const [users, posts] = await Promise.all([
       User.find({

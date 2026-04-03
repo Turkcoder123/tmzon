@@ -13,43 +13,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { getAvatarColor, formatTimeAgo } from '../utils/helpers';
 import * as api from '../api/client';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const CARD_HEIGHT = SCREEN_HEIGHT - 200; // Full-screen minus tab bar and status
-
-const GRADIENT_COLORS = [
-  '#1DA1F2', '#17BF63', '#794BC4', '#F45D22', '#E0245E',
-  '#FFAD1F', '#009688', '#3F51B5', '#E91E63', '#00BCD4',
-  '#673AB7', '#FF5722', '#2196F3', '#4CAF50',
-];
-
-function getCardColor(index, authorName) {
-  if (authorName) {
-    let hash = 0;
-    for (let i = 0; i < authorName.length; i++) {
-      hash = authorName.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return GRADIENT_COLORS[Math.abs(hash) % GRADIENT_COLORS.length];
-  }
-  return GRADIENT_COLORS[index % GRADIENT_COLORS.length];
-}
-
-function formatTimeAgo(dateStr) {
-  if (!dateStr) return '';
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'az önce';
-  if (mins < 60) return `${mins}dk`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}sa`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}g`;
-  return `${Math.floor(days / 7)}h`;
-}
+const CARD_HEIGHT = SCREEN_HEIGHT - 200;
 
 function ReelCard({ item, index, onLike, onComment, onProfile }) {
-  const bgColor = getCardColor(index, item.author?.username);
+  const bgColor = getAvatarColor(item.author?.username);
   const likesCount = Array.isArray(item.likes) ? item.likes.length : (item.engagement || 0);
   const commentsCount = Array.isArray(item.comments) ? item.comments.length : 0;
 
@@ -228,7 +199,7 @@ export default function ExploreScreen({ navigation }) {
                       handleProfile(item.username);
                     }}
                   >
-                    <View style={[styles.searchAvatar, { backgroundColor: getCardColor(0, item.username) }]}>
+                    <View style={[styles.searchAvatar, { backgroundColor: getAvatarColor(item.username) }]}>
                       <Text style={styles.searchAvatarText}>
                         {item.username?.charAt(0)?.toUpperCase()}
                       </Text>
@@ -250,7 +221,7 @@ export default function ExploreScreen({ navigation }) {
                     handleComment(item._id);
                   }}
                 >
-                  <View style={[styles.searchAvatar, { backgroundColor: getCardColor(0, item.author?.username) }]}>
+                  <View style={[styles.searchAvatar, { backgroundColor: getAvatarColor(item.author?.username) }]}>
                     <Ionicons name="document-text-outline" size={18} color="#FFFFFF" />
                   </View>
                   <View style={styles.searchPostContent}>

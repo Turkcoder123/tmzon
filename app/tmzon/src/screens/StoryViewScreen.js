@@ -10,6 +10,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { formatTimeAgo } from '../utils/helpers';
 import * as api from '../api/client';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -64,7 +65,7 @@ export default function StoryViewScreen({ route, navigation }) {
         goNext();
       }
     });
-  }, [groupIndex, storyIndex]);
+  }, [groupIndex, storyIndex, progress]);
 
   useEffect(() => {
     if (currentStory) {
@@ -107,16 +108,6 @@ export default function StoryViewScreen({ route, navigation }) {
     navigation.goBack();
     return null;
   }
-
-  const formatTimeAgo = (dateStr) => {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'az önce';
-    if (mins < 60) return `${mins}dk`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}sa`;
-    return `${Math.floor(hours / 24)}g`;
-  };
 
   return (
     <View style={[styles.container, { backgroundColor: currentStory.backgroundColor || '#1DA1F2' }]}>

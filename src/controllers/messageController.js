@@ -1,6 +1,7 @@
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const User = require('../models/User');
+const mongoose = require('mongoose');
 const logger = require('../logger');
 
 // GET /api/messages/conversations – list conversations for current user
@@ -26,6 +27,10 @@ exports.createConversation = async (req, res) => {
     const { participantId } = req.body;
     if (!participantId) {
       return res.status(400).json({ message: 'participantId is required' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(participantId)) {
+      return res.status(400).json({ message: 'Invalid participantId' });
     }
 
     if (participantId === req.user.id) {
