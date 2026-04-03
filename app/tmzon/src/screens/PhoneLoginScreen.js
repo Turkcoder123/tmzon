@@ -12,25 +12,25 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../context/AuthContext';
+import * as api from '../api/client';
 
-export default function LoginScreen({ navigation }) {
-  const { login } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+export default function PhoneLoginScreen({ navigation }) {
+  const [countryCode, setCountryCode] = useState('+90');
+  const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  async function handleLogin() {
-    if (!email.trim() || !password.trim()) {
-      setError('Please fill in all fields');
+  async function handleSendOTP() {
+    if (!phone.trim()) {
+      setError('Please enter your phone number');
       return;
     }
     setError('');
     setLoading(true);
     try {
-      await login(email.trim(), password);
+      const fullPhone = countryCode + phone.trim();
+      await api.sendPhoneOTP(fullPhone);
+      navigation.navigate('OTPVerification', { phone: fullPhone });
     } catch (e) {
       setError(e.message);
     } finally {
@@ -57,96 +57,65 @@ export default function LoginScreen({ navigation }) {
           </TouchableOpacity>
 
           {/* Header */}
-          <Text style={styles.title}>Welcome Back!</Text>
-          <Text style={styles.subtitle}>Sign in to continue to tmzon</Text>
+          <Text style={styles.title}>Phone Login</Text>
+          <Text style={styles.subtitle}>
+            Enter your phone number to receive a verification code
+          </Text>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          {/* Email Input */}
-          <View style={styles.inputContainer}>
-            <Ionicons name="mail-outline" size={20} color="#AAB8C2" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Email address"
-              placeholderTextColor="#AAB8C2"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
-
-          {/* Password Input */}
-          <View style={styles.inputContainer}>
-            <Ionicons name="lock-closed-outline" size={20} color="#AAB8C2" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#AAB8C2"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-            />
-            <TouchableOpacity
-              style={styles.eyeButton}
-              onPress={() => setShowPassword(!showPassword)}
-            >
-              <Ionicons
-                name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                size={20}
-                color="#AAB8C2"
-              />
+          {/* Phone Input */}
+          <View style={styles.phoneRow}>
+            <TouchableOpacity style={styles.countryCodeBox}>
+              <Text style={styles.flag}>🇹🇷</Text>
+              <Text style={styles.countryCodeText}>{countryCode}</Text>
+              <Ionicons name="chevron-down" size={16} color="#657786" />
             </TouchableOpacity>
+            <View style={styles.phoneInputContainer}>
+              <TextInput
+                style={styles.phoneInput}
+                placeholder="Phone number"
+                placeholderTextColor="#AAB8C2"
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+                maxLength={15}
+              />
+            </View>
           </View>
 
-          {/* Forgot Password */}
-          <TouchableOpacity
-            style={styles.forgotButton}
-            onPress={() => navigation.navigate('ForgotPassword')}
-          >
-            <Text style={styles.forgotText}>Forgot Password?</Text>
-          </TouchableOpacity>
-
-          {/* Login Button */}
+          {/* Continue Button */}
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleLogin}
+            onPress={handleSendOTP}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Login</Text>
+              <Text style={styles.buttonText}>Continue</Text>
             )}
           </TouchableOpacity>
 
           {/* Divider */}
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or continue with</Text>
+            <Text style={styles.dividerText}>or</Text>
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Social Login Buttons */}
-          <View style={styles.socialRow}>
-            <TouchableOpacity style={styles.socialButton}>
-              <Ionicons name="logo-google" size={22} color="#DB4437" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.socialButton}>
-              <Ionicons name="logo-apple" size={22} color="#14171A" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.socialButton}
-              onPress={() => navigation.navigate('PhoneLogin')}
-            >
-              <Ionicons name="call-outline" size={22} color="#1DA1F2" />
-            </TouchableOpacity>
-          </View>
+          {/* Back to email login */}
+          <TouchableOpacity
+            style={styles.emailLoginButton}
+            onPress={() => navigation.navigate('Login')}
+          >
+            <Ionicons name="mail-outline" size={20} color="#1DA1F2" />
+            <Text style={styles.emailLoginText}>Login with Email</Text>
+          </TouchableOpacity>
 
           <View style={styles.spacer} />
 
-          {/* Bottom Link */}
+          {/* Bottom link */}
           <View style={styles.bottomLink}>
             <Text style={styles.bottomText}>New to tmzon? </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Register')}>
@@ -185,6 +154,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: '#657786',
+    lineHeight: 24,
     marginBottom: 32,
   },
   error: {
@@ -193,42 +163,49 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingHorizontal: 4,
   },
-  inputContainer: {
+  phoneRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  countryCodeBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F7F9FA',
     borderWidth: 1,
     borderColor: '#E1E8ED',
     borderRadius: 14,
-    marginBottom: 14,
     paddingHorizontal: 14,
+    paddingVertical: 16,
+    gap: 6,
   },
-  inputIcon: {
-    marginRight: 10,
+  flag: {
+    fontSize: 20,
   },
-  input: {
+  countryCodeText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#14171A',
+  },
+  phoneInputContainer: {
     flex: 1,
+  },
+  phoneInput: {
+    backgroundColor: '#F7F9FA',
+    borderWidth: 1,
+    borderColor: '#E1E8ED',
+    borderRadius: 14,
+    paddingHorizontal: 16,
     paddingVertical: 16,
     fontSize: 16,
     color: '#14171A',
-  },
-  eyeButton: {
-    padding: 4,
-  },
-  forgotButton: {
-    alignSelf: 'flex-end',
-    marginBottom: 24,
-  },
-  forgotText: {
-    color: '#1DA1F2',
-    fontSize: 14,
-    fontWeight: '600',
   },
   button: {
     backgroundColor: '#1DA1F2',
     borderRadius: 14,
     paddingVertical: 18,
     alignItems: 'center',
+    marginTop: 8,
   },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
@@ -247,20 +224,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginHorizontal: 16,
   },
-  socialRow: {
+  emailLoginButton: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: 16,
-  },
-  socialButton: {
-    width: 60,
-    height: 56,
-    borderRadius: 16,
     backgroundColor: '#F7F9FA',
     borderWidth: 1,
     borderColor: '#E1E8ED',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 14,
+    paddingVertical: 16,
+    gap: 10,
+  },
+  emailLoginText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1DA1F2',
   },
   spacer: { flex: 1 },
   bottomLink: {

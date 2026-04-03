@@ -5,15 +5,24 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Ionicons } from '@expo/vector-icons';
 
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import CustomTabBar from './src/components/CustomTabBar';
+
+import WelcomeScreen from './src/screens/WelcomeScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
+import PhoneLoginScreen from './src/screens/PhoneLoginScreen';
+import OTPVerificationScreen from './src/screens/OTPVerificationScreen';
+
+import MessagesScreen from './src/screens/MessagesScreen';
+import ExploreScreen from './src/screens/ExploreScreen';
+import MenuScreen from './src/screens/MenuScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
+
 import FeedScreen from './src/screens/FeedScreen';
 import PostDetailScreen from './src/screens/PostDetailScreen';
-import ProfileScreen from './src/screens/ProfileScreen';
 import EditProfileScreen from './src/screens/EditProfileScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import ChangePasswordScreen from './src/screens/ChangePasswordScreen';
@@ -26,48 +35,16 @@ const Tab = createBottomTabNavigator();
 function MainTabs() {
   return (
     <Tab.Navigator
+      tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#1DA1F2',
-        tabBarInactiveTintColor: '#657786',
-        tabBarStyle: {
-          borderTopColor: '#E1E8ED',
-        },
       }}
+      sceneContainerStyle={{ paddingBottom: 80 }}
     >
-      <Tab.Screen
-        name="Feed"
-        component={FeedScreen}
-        options={{
-          tabBarLabel: 'Akış',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Profile"
-        component={ProfileScreen}
-        options={{
-          tabBarLabel: 'Profil',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Settings"
-        component={SettingsScreen}
-        options={{
-          tabBarLabel: 'Ayarlar',
-          headerShown: true,
-          headerTitle: 'Ayarlar',
-          headerTintColor: '#1DA1F2',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings-outline" size={size} color={color} />
-          ),
-        }}
-      />
+      <Tab.Screen name="Messages" component={MessagesScreen} />
+      <Tab.Screen name="Explore" component={ExploreScreen} />
+      <Tab.Screen name="Menu" component={MenuScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 }
@@ -88,6 +65,11 @@ function AppNavigator() {
       {!isLoggedIn ? (
         <>
           <Stack.Screen
+            name="Welcome"
+            component={WelcomeScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
             name="Login"
             component={LoginScreen}
             options={{ headerShown: false }}
@@ -100,7 +82,17 @@ function AppNavigator() {
           <Stack.Screen
             name="ForgotPassword"
             component={ForgotPasswordScreen}
-            options={{ title: 'Şifremi Unuttum' }}
+            options={{ title: 'Forgot Password' }}
+          />
+          <Stack.Screen
+            name="PhoneLogin"
+            component={PhoneLoginScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="OTPVerification"
+            component={OTPVerificationScreen}
+            options={{ headerShown: false }}
           />
         </>
       ) : (
@@ -113,32 +105,42 @@ function AppNavigator() {
           <Stack.Screen
             name="PostDetail"
             component={PostDetailScreen}
-            options={{ title: 'Gönderi' }}
+            options={{ title: 'Post' }}
+          />
+          <Stack.Screen
+            name="Feed"
+            component={FeedScreen}
+            options={{ title: 'Feed' }}
           />
           <Stack.Screen
             name="EditProfile"
             component={EditProfileScreen}
-            options={{ title: 'Profili Düzenle' }}
+            options={{ title: 'Edit Profile' }}
           />
           <Stack.Screen
             name="ProfileView"
             component={ProfileScreen}
-            options={{ title: 'Profil' }}
+            options={{ title: 'Profile' }}
           />
           <Stack.Screen
             name="ChangePassword"
             component={ChangePasswordScreen}
-            options={{ title: 'Şifre Değiştir' }}
+            options={{ title: 'Change Password' }}
           />
           <Stack.Screen
             name="Sessions"
             component={SessionsScreen}
-            options={{ title: 'Aktif Oturumlar' }}
+            options={{ title: 'Active Sessions' }}
           />
           <Stack.Screen
             name="VerifyEmail"
             component={VerifyEmailScreen}
-            options={{ title: 'E-posta Doğrulama' }}
+            options={{ title: 'Email Verification' }}
+          />
+          <Stack.Screen
+            name="Settings"
+            component={SettingsScreen}
+            options={{ title: 'Settings' }}
           />
         </>
       )}
