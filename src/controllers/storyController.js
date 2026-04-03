@@ -1,5 +1,6 @@
 const Story = require('../models/Story');
 const User = require('../models/User');
+const mongoose = require('mongoose');
 const logger = require('../logger');
 
 // GET /api/stories – list active stories from followed users + own
@@ -99,6 +100,10 @@ exports.createStory = async (req, res) => {
 // POST /api/stories/:id/view – mark story as viewed
 exports.viewStory = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid story ID' });
+    }
+
     const story = await Story.findById(req.params.id);
     if (!story) return res.status(404).json({ message: 'Story not found' });
 
@@ -119,6 +124,10 @@ exports.viewStory = async (req, res) => {
 // DELETE /api/stories/:id – delete own story
 exports.deleteStory = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid story ID' });
+    }
+
     const story = await Story.findById(req.params.id);
     if (!story) return res.status(404).json({ message: 'Story not found' });
 

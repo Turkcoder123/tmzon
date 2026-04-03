@@ -68,6 +68,10 @@ exports.createConversation = async (req, res) => {
 // GET /api/messages/conversations/:id/messages – get messages in a conversation
 exports.getMessages = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid conversation ID' });
+    }
+
     const conversation = await Conversation.findById(req.params.id);
     if (!conversation) {
       return res.status(404).json({ message: 'Conversation not found' });
@@ -102,6 +106,10 @@ exports.getMessages = async (req, res) => {
 // POST /api/messages/conversations/:id/messages – send a message
 exports.sendMessage = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid conversation ID' });
+    }
+
     const { content } = req.body;
     if (!content || !content.trim()) {
       return res.status(400).json({ message: 'content is required' });
@@ -147,6 +155,10 @@ exports.sendMessage = async (req, res) => {
 // POST /api/messages/conversations/:id/read – mark messages as read
 exports.markAsRead = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid conversation ID' });
+    }
+
     const conversation = await Conversation.findById(req.params.id);
     if (!conversation) {
       return res.status(404).json({ message: 'Conversation not found' });

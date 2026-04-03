@@ -65,7 +65,7 @@ export default function StoryViewScreen({ route, navigation }) {
         goNext();
       }
     });
-  }, [groupIndex, storyIndex, progress]);
+  }, [groupIndex, storyIndex]);
 
   useEffect(() => {
     if (currentStory) {

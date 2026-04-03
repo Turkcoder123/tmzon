@@ -49,7 +49,7 @@ export default function ChatScreen({ route, navigation }) {
   const loadMessages = useCallback(async () => {
     try {
       const data = await api.getMessages(conversationId);
-      setMessages(data.reverse ? data.reverse() : data);
+      setMessages(Array.isArray(data) ? [...data].reverse() : data);
       api.markAsRead(conversationId).catch(() => {});
     } catch {
       // ignore
