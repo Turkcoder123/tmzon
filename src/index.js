@@ -11,6 +11,9 @@ const logger = require('./logger');
 const authRoutes = require('./routes/auth');
 const postRoutes = require('./routes/posts');
 const userRoutes = require('./routes/users');
+const messageRoutes = require('./routes/messages');
+const storyRoutes = require('./routes/stories');
+const exploreRoutes = require('./routes/explore');
 
 const app = express();
 
@@ -45,6 +48,9 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authLimiter, authSlowDown, authRoutes);
 app.use('/api/posts', apiLimiter, postRoutes);
 app.use('/api/users', apiLimiter, userRoutes);
+app.use('/api/messages', apiLimiter, messageRoutes);
+app.use('/api/stories', apiLimiter, storyRoutes);
+app.use('/api/explore', apiLimiter, exploreRoutes);
 
 app.use((err, req, res, next) => {
   logger.error(`Unhandled error: ${err.message}`, { stack: err.stack, url: req.url, method: req.method });

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,180 +6,187 @@ import {
   FlatList,
   TouchableOpacity,
   Platform,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import { useAuth } from '../context/AuthContext';
+import * as api from '../api/client';
 
-const STORIES = [
-  { id: 'add', type: 'add' },
-  { id: '1', name: 'Alex', color: '#1DA1F2', hasNew: true },
-  { id: '2', name: 'Sarah', color: '#17BF63', hasNew: true },
-  { id: '3', name: 'Mike', color: '#794BC4', hasNew: false },
-  { id: '4', name: 'Emma', color: '#F45D22', hasNew: true },
-  { id: '5', name: 'John', color: '#E0245E', hasNew: false },
-  { id: '6', name: 'Lisa', color: '#FFAD1F', hasNew: true },
+function formatTimeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'az önce';
+  if (mins < 60) return `${mins}dk`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}sa`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}g`;
+  return `${Math.floor(days / 7)}h`;
+}
+
+const AVATAR_COLORS = [
+  '#1DA1F2', '#17BF63', '#794BC4', '#F45D22', '#E0245E',
+  '#FFAD1F', '#009688', '#3F51B5', '#E91E63', '#00BCD4',
 ];
 
-const CHATS = [
-  {
-    id: '1',
-    name: 'Alex Johnson',
-    lastMessage: 'Hey! How are you doing?',
-    time: '2m',
-    unread: 3,
-    color: '#1DA1F2',
-    online: true,
-  },
-  {
-    id: '2',
-    name: 'Sarah Williams',
-    lastMessage: 'Thanks for sharing that!',
-    time: '15m',
-    unread: 1,
-    color: '#17BF63',
-    online: true,
-  },
-  {
-    id: '3',
-    name: 'Mike Chen',
-    lastMessage: 'See you tomorrow at 10',
-    time: '1h',
-    unread: 0,
-    color: '#794BC4',
-    online: false,
-  },
-  {
-    id: '4',
-    name: 'Emma Davis',
-    lastMessage: 'The project looks great 🎉',
-    time: '2h',
-    unread: 0,
-    color: '#F45D22',
-    online: false,
-  },
-  {
-    id: '5',
-    name: 'John Smith',
-    lastMessage: 'Can you send me the files?',
-    time: '5h',
-    unread: 0,
-    color: '#E0245E',
-    online: true,
-  },
-  {
-    id: '6',
-    name: 'Lisa Anderson',
-    lastMessage: 'Happy birthday! 🎂',
-    time: '1d',
-    unread: 0,
-    color: '#FFAD1F',
-    online: false,
-  },
-  {
-    id: '7',
-    name: 'David Park',
-    lastMessage: "Let's catch up soon",
-    time: '2d',
-    unread: 0,
-    color: '#1DA1F2',
-    online: false,
-  },
-];
+function getAvatarColor(str) {
+  if (!str) return AVATAR_COLORS[0];
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
 
-function StoryItem({ item }) {
+function StoryItem({ item, onPress }) {
   if (item.type === 'add') {
     return (
-      <TouchableOpacity style={styles.storyItem}>
+      <TouchableOpacity style={styles.storyItem} onPress={onPress}>
         <View style={styles.addStoryCircle}>
           <Ionicons name="add" size={28} color="#1DA1F2" />
         </View>
-        <Text style={styles.storyName}>Your Story</Text>
+        <Text style={styles.storyName}>Hikaye</Text>
       </TouchableOpacity>
     );
   }
 
   return (
-    <TouchableOpacity style={styles.storyItem}>
+    <TouchableOpacity style={styles.storyItem} onPress={onPress}>
       <View style={[
         styles.storyRing,
         item.hasNew ? { borderColor: '#1DA1F2' } : { borderColor: '#E1E8ED' },
       ]}>
-        <View style={[styles.storyAvatar, { backgroundColor: item.color }]}>
+        <View style={[styles.storyAvatar, { backgroundColor: getAvatarColor(item.user?.username) }]}>
           <Text style={styles.storyAvatarText}>
-            {item.name.charAt(0)}
+            {item.user?.username?.charAt(0)?.toUpperCase() || '?'}
           </Text>
         </View>
       </View>
       <Text style={styles.storyName} numberOfLines={1}>
-        {item.name}
+        {item.user?.username || 'User'}
       </Text>
     </TouchableOpacity>
   );
 }
 
-function ChatItem({ item }) {
+function ChatItem({ item, onPress, currentUserId }) {
+  const other = item.participants?.find((p) => p._id !== currentUserId);
+  const name = other?.username || 'User';
+  const color = getAvatarColor(name);
+
   return (
-    <TouchableOpacity style={styles.chatItem} activeOpacity={0.7}>
+    <TouchableOpacity style={styles.chatItem} activeOpacity={0.7} onPress={onPress}>
       <View style={styles.chatAvatarContainer}>
-        <View style={[styles.chatAvatar, { backgroundColor: item.color }]}>
+        <View style={[styles.chatAvatar, { backgroundColor: color }]}>
           <Text style={styles.chatAvatarText}>
-            {item.name.charAt(0)}
+            {name.charAt(0).toUpperCase()}
           </Text>
         </View>
-        {item.online && <View style={styles.onlineDot} />}
       </View>
 
       <View style={styles.chatContent}>
         <View style={styles.chatHeader}>
-          <Text style={[
-            styles.chatName,
-            item.unread > 0 && styles.chatNameBold,
-          ]}>
-            {item.name}
-          </Text>
-          <Text style={[
-            styles.chatTime,
-            item.unread > 0 && styles.chatTimeActive,
-          ]}>
-            {item.time}
+          <Text style={styles.chatName}>{name}</Text>
+          <Text style={styles.chatTime}>
+            {formatTimeAgo(item.lastMessage?.createdAt || item.updatedAt)}
           </Text>
         </View>
         <View style={styles.chatFooter}>
-          <Text
-            style={[
-              styles.chatMessage,
-              item.unread > 0 && styles.chatMessageBold,
-            ]}
-            numberOfLines={1}
-          >
-            {item.lastMessage}
+          <Text style={styles.chatMessage} numberOfLines={1}>
+            {item.lastMessage?.content || 'Sohbete başla...'}
           </Text>
-          {item.unread > 0 && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadText}>{item.unread}</Text>
-            </View>
-          )}
         </View>
       </View>
     </TouchableOpacity>
   );
 }
 
-export default function MessagesScreen() {
+export default function MessagesScreen({ navigation }) {
+  const { user } = useAuth();
+  const [conversations, setConversations] = useState([]);
+  const [storyGroups, setStoryGroups] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadData = useCallback(async () => {
+    try {
+      const [convData, storyData] = await Promise.all([
+        api.getConversations().catch(() => []),
+        api.getStories().catch(() => []),
+      ]);
+      setConversations(convData);
+      setStoryGroups(storyData);
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadData();
+  };
+
+  const storyListData = [
+    { id: 'add', type: 'add' },
+    ...storyGroups.map((g, i) => ({ ...g, id: `story-${i}` })),
+  ];
+
+  const handleStoryPress = (item, index) => {
+    if (item.type === 'add') {
+      navigation.navigate('CreateStory');
+      return;
+    }
+    // Navigate to story viewer
+    const groupIndex = index - 1; // subtract 1 for the "add" button
+    navigation.navigate('StoryView', {
+      storyGroups,
+      initialGroupIndex: groupIndex,
+    });
+  };
+
+  const handleChatPress = (conv) => {
+    const other = conv.participants?.find((p) => p._id !== user?.userId);
+    navigation.navigate('Chat', {
+      conversationId: conv._id,
+      participantName: other?.username || 'User',
+      participantColor: getAvatarColor(other?.username),
+    });
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.toolbar}>
+          <Text style={styles.toolbarTitle}>Mesajlar</Text>
+        </View>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#1DA1F2" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       {/* Toolbar */}
       <View style={styles.toolbar}>
-        <Text style={styles.toolbarTitle}>Messages</Text>
+        <Text style={styles.toolbarTitle}>Mesajlar</Text>
         <View style={styles.toolbarActions}>
           <TouchableOpacity style={styles.toolbarButton}>
-            <Ionicons name="create-outline" size={24} color="#14171A" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.toolbarButton}>
             <Ionicons name="search-outline" size={24} color="#14171A" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.toolbarButton}>
-            <Ionicons name="ellipsis-horizontal" size={24} color="#14171A" />
           </TouchableOpacity>
         </View>
       </View>
@@ -187,8 +194,10 @@ export default function MessagesScreen() {
       {/* Story List */}
       <View style={styles.storySection}>
         <FlatList
-          data={STORIES}
-          renderItem={({ item }) => <StoryItem item={item} />}
+          data={storyListData}
+          renderItem={({ item, index }) => (
+            <StoryItem item={item} onPress={() => handleStoryPress(item, index)} />
+          )}
           keyExtractor={(item) => item.id}
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -201,11 +210,29 @@ export default function MessagesScreen() {
 
       {/* Chat List */}
       <FlatList
-        data={CHATS}
-        renderItem={({ item }) => <ChatItem item={item} />}
-        keyExtractor={(item) => item.id}
+        data={conversations}
+        renderItem={({ item }) => (
+          <ChatItem
+            item={item}
+            onPress={() => handleChatPress(item)}
+            currentUserId={user?.userId}
+          />
+        )}
+        keyExtractor={(item) => item._id}
         contentContainerStyle={styles.chatList}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#1DA1F2" />
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="chatbubbles-outline" size={48} color="#E1E8ED" />
+            <Text style={styles.emptyTitle}>Henüz mesaj yok</Text>
+            <Text style={styles.emptySubtitle}>
+              Birini takip edip sohbet başlatın
+            </Text>
+          </View>
+        }
       />
     </SafeAreaView>
   );
@@ -215,6 +242,11 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   toolbar: {
     flexDirection: 'row',
@@ -296,6 +328,7 @@ const styles = StyleSheet.create({
   },
   chatList: {
     paddingVertical: 4,
+    flexGrow: 1,
   },
   chatItem: {
     flexDirection: 'row',
@@ -319,17 +352,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  onlineDot: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#17BF63',
-    borderWidth: 2.5,
-    borderColor: '#FFFFFF',
-  },
   chatContent: {
     flex: 1,
   },
@@ -341,19 +363,12 @@ const styles = StyleSheet.create({
   },
   chatName: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#14171A',
-  },
-  chatNameBold: {
-    fontWeight: '700',
   },
   chatTime: {
     fontSize: 13,
     color: '#AAB8C2',
-  },
-  chatTimeActive: {
-    color: '#1DA1F2',
-    fontWeight: '600',
   },
   chatFooter: {
     flexDirection: 'row',
@@ -366,22 +381,22 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
-  chatMessageBold: {
-    color: '#657786',
-    fontWeight: '500',
-  },
-  unreadBadge: {
-    backgroundColor: '#1DA1F2',
-    borderRadius: 12,
-    minWidth: 22,
-    height: 22,
+  emptyContainer: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
+    paddingTop: 80,
   },
-  unreadText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#657786',
+    marginTop: 16,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#AAB8C2',
+    marginTop: 4,
+    textAlign: 'center',
   },
 });

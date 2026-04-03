@@ -229,3 +229,67 @@ export function getUserProfile(username) {
 export function toggleFollow(username) {
   return request(`/api/users/${username}/follow`, { method: 'POST' });
 }
+
+// Messages
+export function getConversations() {
+  return request('/api/messages/conversations');
+}
+
+export function createConversation(participantId) {
+  return request('/api/messages/conversations', {
+    method: 'POST',
+    body: { participantId },
+  });
+}
+
+export function getMessages(conversationId, page = 1) {
+  return request(`/api/messages/conversations/${conversationId}/messages?page=${page}`);
+}
+
+export function sendMessage(conversationId, content) {
+  return request(`/api/messages/conversations/${conversationId}/messages`, {
+    method: 'POST',
+    body: { content },
+  });
+}
+
+export function markAsRead(conversationId) {
+  return request(`/api/messages/conversations/${conversationId}/read`, { method: 'POST' });
+}
+
+// Stories
+export function getStories() {
+  return request('/api/stories');
+}
+
+export function getUserStories(username) {
+  return request(`/api/stories/user/${username}`);
+}
+
+export function createStory(content, backgroundColor, textColor) {
+  return request('/api/stories', {
+    method: 'POST',
+    body: { content, backgroundColor, textColor },
+  });
+}
+
+export function viewStory(storyId) {
+  return request(`/api/stories/${storyId}/view`, { method: 'POST' });
+}
+
+export function deleteStory(storyId) {
+  return request(`/api/stories/${storyId}`, { method: 'DELETE' });
+}
+
+// Explore
+export function getExploreFeed(page = 1) {
+  return request(`/api/explore?page=${page}`);
+}
+
+export function getTrending() {
+  return request('/api/explore/trending');
+}
+
+export function searchExplore(query) {
+  return request(`/api/explore/search?q=${encodeURIComponent(query)}`);
+}

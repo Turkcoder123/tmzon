@@ -28,6 +28,9 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import ChangePasswordScreen from './src/screens/ChangePasswordScreen';
 import SessionsScreen from './src/screens/SessionsScreen';
 import VerifyEmailScreen from './src/screens/VerifyEmailScreen';
+import ChatScreen from './src/screens/ChatScreen';
+import StoryViewScreen from './src/screens/StoryViewScreen';
+import CreateStoryScreen from './src/screens/CreateStoryScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -141,6 +144,23 @@ function AppNavigator() {
             name="Settings"
             component={SettingsScreen}
             options={{ title: 'Settings' }}
+          />
+          <Stack.Screen
+            name="Chat"
+            component={ChatScreen}
+            options={({ route }) => ({
+              title: route.params?.participantName || 'Chat',
+            })}
+          />
+          <Stack.Screen
+            name="StoryView"
+            component={StoryViewScreen}
+            options={{ headerShown: false, animation: 'fade' }}
+          />
+          <Stack.Screen
+            name="CreateStory"
+            component={CreateStoryScreen}
+            options={{ title: 'Story Oluştur' }}
           />
         </>
       )}
